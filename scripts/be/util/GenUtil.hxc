@@ -1,0 +1,280 @@
+package be.util;
+
+import StringTools;
+
+import thx.Objects;
+import thx.Types;
+
+import flixel.FlxG;
+import flixel.math.FlxMath;
+import flixel.tweens.FlxEase;
+
+import funkin.modding.module.ScriptedModule;
+import funkin.util.ReflectUtil;
+
+/**
+ * An object to use for weighted random callbacks in `randomCallback`.
+ */
+typedef RandomCallbackData = {
+	/**
+	 * The arbitrary weight of the callback (higher is more likely).
+	 * 
+	 * For example, 2 callbacks with weights 0.5 and 1 would have a 1/3 and 2/3 chance of being called respectively.
+	 */
+	weight:Float,
+	
+	/**
+	 * The callback to call if chosen.
+	 */
+	callback:()->Void
+}
+
+/**
+ * General utility module.
+ */
+class GenUtil extends ScriptedModule {
+	public function new() {
+		super("be.util.GenUtil", -2147483648);
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+	}
+	
+	/**
+	 * Because hscript kinda breaks when try/catch blocks fail, this function is a temporary workaround.
+	 * Unfortunately, it's not perfect, since the catch value isn't accessible, but it's better than nothing...
+	 * 
+	 * @param func The function to try.
+	 * @param caught The function to run if the try block fails.
+	 */
+	public function tryBlock(func:()->Void, ?caught:()->Void):Void {
+		var block:()->Null<Bool> = function():Null<Bool> {
+			var success:Bool = true;
+			
+			try {
+				func();
+			} catch (e:Dynamic) {}
+			
+			return success;
+		};
+		
+		if (block() != true && caught != null) {
+			caught();
+		}
+	}
+	
+	/**
+	 * Merges two anonymous objects together.
+	 * 
+	 * @param a The base object.
+	 * @param b The object to merge into the base object, overwriting any conflicting keys.
+	 * @param exclusive If `true`, only keys in the base object will be kept. Otherwise, merging is additive.
+	 * @return A new object with the merged values.
+	 */
+	public function objectMerge(a:Dynamic, b:Dynamic, exclusive:Bool = false):Dynamic {
+		var ret:Dynamic = Objects.clone(a);
+		
+		for (path in objectPaths(exclusive ? a : b)) {
+			var aVal:Dynamic = Objects.getPath(a, path);
+			var bVal:Dynamic = Objects.getPath(b, path);
+			
+			if (bVal == null) {
+				continue;
+			}
+			
+			if (Types.isAnonymousObject(aVal) && Types.isAnonymousObject(bVal)) {
+				Objects.setPath(ret, path, objectMerge(aVal, bVal, exclusive));
+			} else {
+				Objects.setPath(ret, path, bVal);
+			}
+		}
+		
+		return ret;
+	}
+	
+	/**
+	 * Gets all paths of an anonymous object.
+	 * 
+	 * @param obj The object to get paths from.
+	 * @return An array of paths.
+	 */
+	public function objectPaths(obj:Dynamic):Array<String> {
+		var ret:Array<String> = new Array();
+		
+		for (key in ReflectUtil.getAnonymousFieldsOf(obj)) {
+			ret.push(key);
+			
+			var val:Dynamic = Objects.getPath(obj, key);
+			if (Types.isAnonymousObject(val)) {
+				for (subkey in objectPaths(val)) {
+					ret.push(key + "." + subkey);
+				}
+			}
+		}
+		
+		return ret;
+	}
+	
+	/**
+	 * Shuffles an array using the Fisher-Yates method.
+	 * 
+	 * @param array The array to shuffle.
+	 * @return A clone of `array` with its elements shuffled.
+	 */
+	public function shuffleArray(array:Array<Dynamic>):Array<Dynamic> {
+		var ret:Array<Dynamic> = array.copy();
+		
+		for (i in 0...ret.length - 1) {
+			var j:Int = FlxG.random.int(i, ret.length - 1);
+			var temp:Dynamic = ret[i];
+			ret[i] = ret[j];
+			ret[j] = temp;
+		}
+		
+		return ret;
+	}
+	
+	/**
+	 * Makes a random weighted selection from a list of callbacks, and calls it by default.
+	 * 
+	 * @param callbacks An array of `RandomCallbackData` objects.
+	 * @param callImmediately Whether to call the chosen callback immediately. Defaults to `true`.
+	 * @param randOverride Optional override for the random number to use. Range is clamped to [0, 1].
+	 * @return The callback that was chosen.
+	 */
+	public function randomCallback(callbacks:Array<RandomCallbackData>, callImmediately:Bool = true, ?randOverride:Float):()->Void {
+		var totalWeight:Float = 0;
+		for (callback in callbacks) {
+			if (callback.weight < 0) {
+				callback.weight = 0;
+			}
+			
+			totalWeight += callback.weight;
+		}
+		
+		var rand:Float = FlxG.random.float(0, 1);
+		if (randOverride != null) {
+			rand = FlxMath.bound(randOverride, 0, 1);
+		}
+		
+		rand *= totalWeight;
+		
+		var currentWeight:Float = 0;
+		for (callback in callbacks) {
+			currentWeight += callback.weight;
+			if (rand <= currentWeight) {
+				if (callImmediately) {
+					callback.callback();
+				}
+				
+				return callback.callback;
+			}
+		}
+	}
+	
+	/**
+	 * Converts an integer color like FlxColor to a float array for use in shaders.
+	 * 
+	 * @param color The input integer color to convert, in 0xAARRGGBB format.
+	 * @return A 4-element float color array, in the order [R, G, B, A] like `vec4`.
+	 */
+	public function intColorToVec4(color:Int):Array<Float> {
+		return [
+			((color >> 16) & 0xff) / 255,
+			((color >> 8)  & 0xff) / 255,
+			((color >> 0)  & 0xff) / 255,
+			((color >> 24) & 0xff) / 255
+		];
+	}
+	
+	/**
+	 * A map of `FlxEase`s used by `getEase`.
+	 */
+	public var eases:Dynamic = {
+		quadin: FlxEase.quadIn,                 quadout: FlxEase.quadOut,                 quadinout: FlxEase.quadInOut,
+		cubein: FlxEase.cubeIn,                 cubeout: FlxEase.cubeOut,                 cubeinout: FlxEase.cubeInOut,
+		quartin: FlxEase.quartIn,               quartout: FlxEase.quartOut,               quartinout: FlxEase.quartInOut,
+		quintin: FlxEase.quintIn,               quintout: FlxEase.quintOut,               quintinout: FlxEase.quintInOut,
+		expoin: FlxEase.expoIn,                 expoout: FlxEase.expoOut,                 expoinout: FlxEase.expoInOut,
+		sinein: FlxEase.sineIn,                 sineout: FlxEase.sineOut,                 sineinout: FlxEase.sineInOut,
+		circin: FlxEase.circIn,                 circout: FlxEase.circOut,                 circinout: FlxEase.circInOut,
+		smoothstepin: FlxEase.smoothStepIn,     smoothstepout: FlxEase.smoothStepOut,     smoothstepinout: FlxEase.smoothStepInOut,
+		smootherstepin: FlxEase.smootherStepIn, smootherstepout: FlxEase.smootherStepOut, smootherstepinout: FlxEase.smootherStepInOut,
+		backin: FlxEase.backIn,                 backout: FlxEase.backOut,                 backinout: FlxEase.backInOut,
+		bouncein: FlxEase.bounceIn,             bounceout: FlxEase.bounceOut,             bounceinout: FlxEase.bounceInOut,
+		elasticin: FlxEase.elasticIn,           elasticout: FlxEase.elasticOut,           elasticinout: FlxEase.elasticInOut,
+		linear: FlxEase.linear
+	};
+	
+	/**
+	 * Gets a `FlxEase` by name.
+	 * 
+	 * @param name The name of the `FlxEase` to get. Defaults to "linear".
+	 * @return The `FlxEase` with the given name, linear if not found.
+	 */
+	public function getEase(?name:String):Dynamic {
+		if (name == null) {
+			name = "linear";
+		}
+		
+		name = StringTools.replace(name, " ", "");
+		name = StringTools.replace(name, "-", "");
+		name = StringTools.replace(name, "_", "");
+		name = StringTools.trim(name);
+		name = name.toLowerCase();
+		
+		if (ReflectUtil.getAnonymousField(eases, name) == null) {
+			name = "linear";
+		}
+		
+		return ReflectUtil.getAnonymousField(eases, name);
+	}
+	
+	private var invalidChars:Array<String> = [":", "*", "?", "\"", "<", ">", "|"];
+		
+	/**
+	 * Prevent paths from exiting the root.
+	 *
+	 * @param path The path to sanitize.
+	 * @return The sanitized path.
+	 */
+	public static function sanitizePath(path:String):String {
+		path = StringTools.trim(path);
+		path = StringTools.replace(path, "\\", "/");
+		
+		if (StringTools.contains(path, ":")) {
+			path = path.substring(path.lastIndexOf(":") + 1);
+		}
+		
+		while (path.charAt(0) == "/") {
+			path = path.substring(1);
+		}
+		
+		for (char in invalidChars) {
+			path = StringTools.replace(path, char, "");
+		}
+		
+		var parts:Array<String> = path.split("/");
+		var sanitized:Array<String> = new Array();
+		for (part in parts) {
+			switch (part) {
+				case ".", "": {
+					continue;
+				}
+				
+				case "..": {
+					if (sanitized.length > 0) {
+						sanitized.pop();
+					}
+				}
+				
+				default: {
+					sanitized.push(part);
+				}
+			}
+		}
+		
+		return sanitized.join("/");
+	}
+}

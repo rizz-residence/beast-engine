@@ -1,0 +1,99 @@
+package be.util;
+
+import funkin.modding.module.ScriptedModule;
+import funkin.util.MathUtil;
+
+/**
+ * Math utility module.
+ */
+class MathUtil extends ScriptedModule {
+	public function new() {
+		super("be.util.MathUtil", -2147483648);
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+	}
+	
+	/**
+	 * Inverts a lerp operation, returning the percentage of a value between two other values.
+	 * 
+	 * @param v The lerp output value.
+	 * @param a The lerp start value.
+	 * @param b The lerp end value.
+	 * @return The lerp alpha value.
+	 */
+	public function inverseLerp(v:Float, a:Float, b:Float):Float {
+		return (v - a) / (b - a);
+	}
+	
+	/**
+	 * Exponential decay interpolation.
+	 *
+	 * Framerate-independent because the rate-of-change is proportional to the difference, so you can
+	 * use the time elapsed since the last frame as `deltaTime` and the function will be consistent.
+	 *
+	 * Equivalent to `smoothLerpPrecision(base, target, deltaTime, halfLife, 0.5)`.
+	 *
+	 * @param base The starting or current value.
+	 * @param target The value this function approaches.
+	 * @param deltaTime The change in time along the function in seconds.
+	 * @param halfLife Time in seconds to reach halfway to `target`.
+	 *
+	 * @see https://twitter.com/FreyaHolmer/status/1757918211679650262
+	 *
+	 * @return The interpolated value.
+	 */
+	public function smoothLerpDecay(base:Float, target:Float, deltaTime:Float, halfLife:Float):Float {
+		if (deltaTime == 0) {
+			return base;
+		}
+		
+		if (base == target) {
+			return target;
+		}
+		
+		return MathUtil.lerp(target, base, MathUtil.exp2(-deltaTime / halfLife));
+	}
+	
+	/**
+	 * Exponential decay interpolation.
+	 *
+	 * Framerate-independent because the rate-of-change is proportional to the difference, so you can
+	 * use the time elapsed since the last frame as `deltaTime` and the function will be consistent.
+	 *
+	 * Equivalent to `smoothLerpDecay(base, target, deltaTime, -duration / logBase(2, precision))`.
+	 *
+	 * @param base The starting or current value.
+	 * @param target The value this function approaches.
+	 * @param deltaTime The change in time along the function in seconds.
+	 * @param duration Time in seconds to reach `target` within `precision`, relative to the original distance.
+	 * @param precision Relative target precision of the interpolation. Defaults to 1% distance remaining.
+	 *
+	 * @see https://twitter.com/FreyaHolmer/status/1757918211679650262
+	 *
+	 * @return The interpolated value.
+	 */
+	public function smoothLerpPrecision(base:Float, target:Float, deltaTime:Float, duration:Float, precision:Float = 1 / 100):Float {
+		if (deltaTime == 0) {
+			return base;
+		}
+		
+		if (base == target) {
+			return target;
+		}
+		
+		return MathUtil.lerp(target, base, Math.pow(precision, deltaTime / duration));
+	}
+	
+	/**
+	 * A more mathematically correct modulo operation than the built-in `%` operator.
+	 * @param a Dividend.
+	 * @param b Divisor.
+	 * @return `a mod b`.
+	 */
+	public static function mod(a:Float, b:Float):Float {
+		b = Math.abs(b);
+		return a - b * Math.floor(a / b);
+	}
+}

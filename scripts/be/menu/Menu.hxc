@@ -1,0 +1,595 @@
+package be.menu;
+
+import flixel.FlxG;
+import flixel.FlxBasic;
+import flixel.math.FlxMath;
+
+import funkin.PlayerSettings;
+import funkin.input.Controls;
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+
+/**
+ * An object representing a menu.
+ */
+typedef MenuObj = {
+	/**
+	 * Arbitrary custom data attached to the menu.
+	 */
+	data:Null<Dynamic>,
+	
+	/**
+	 * Arbitrary related container object.
+	 */
+	container:Null<FlxBasic>,
+	
+	/**
+	 * Whether menu input is enabled.
+	 */
+	enabled:Bool,
+	
+	/**
+	 * Stops the menu from updating completely.
+	 * 
+	 * `enabled` is ignored if `true`.
+	 */
+	frozen:Bool,
+	
+	/**
+	 * Internal index for the current keyboard-based `MenuItem` selection.
+	 * 
+	 * Don't set directly, use `setSelection` instead.
+	 */
+	selection:Int,
+	
+	/**
+	 * Internal index for the previous keyboard-based `MenuItem` selection.
+	 * 
+	 * Not necessary for the menu to function, mainly just for user convenience.
+	 */
+	prevSelection:Int,
+	
+	/**
+	 * Override the current keyboard-based `MenuItem` selection.
+	 * 
+	 * Also calls `onFocus` and `onUnfocus` for the respective items.
+	 * 
+	 * @param selection The new selection.
+	 */
+	setSelection:(Int)->Void,
+	
+	/**
+	 * All keyboard-based `MenuItem`s in the menu.
+	 * 
+	 * Don't push to directly, use `pushItems` instead.
+	 */
+	items:Array<Dynamic>,
+	
+	/**
+	 * The number of columns for keyboard-based `MenuItem`s.
+	 */
+	sizeX:Int,
+	
+	/**
+	 * The number of rows for keyboard-based `MenuItem`s.
+	 */
+	sizeY:Int,
+	
+	/**
+	 * Whether the menu should wrap around the X axis for keyboard-based `MenuItem`s.
+	 */
+	wrapX:Bool,
+	
+	/**
+	 * Whether the menu should wrap around the Y axis for keyboard-based `MenuItem`s.
+	 */
+	wrapY:Bool,
+	
+	/**
+	 * Push existing `MenuItem`s to the menu as keyboard-based items.
+	 * 
+	 * @param items The items to add in order.
+	 * @param autoEnable Whether to automatically enable the items as they're added.
+	 */
+	pushItems:(Array<Dynamic>, Bool)->Void,
+	
+	/**
+	 * Internal index for the current mouse-based `MenuItem` selection.
+	 * 
+	 * Should not be set directly.
+	 */
+	mouseSelection:Int,
+	
+	/**
+	 * Internal index for the previous mouse-based `MenuItem` selection.
+	 * 
+	 * Not necessary for the menu to function, mainly just for user convenience.
+	 */
+	prevMouseSelection:Int,
+	
+	/**
+	 * All mouse-based `MenuItem`s in the menu.
+	 * 
+	 * The order doesn't matter unless you have items on top of each other,
+	 * in which case the one with the lowest index will be selected (first found in overlap check).
+	 * 
+	 * Don't push to directly, use `pushMouseItems` instead.
+	 */
+	mouseItems:Array<Dynamic>,
+	
+	/**
+	 * Push existing `MenuItem`s to the menu as mouse-based items.
+	 * 
+	 * @param items The items to add in order.
+	 * @param autoEnable Whether to automatically enable the items as they're added.
+	 */
+	pushMouseItems:(Array<Dynamic>, Bool)->Void,
+	
+	/**
+	 * Arbitrary callback meant to be called when the menu is entered.
+	 */
+	onEnter:Null<()->Void>,
+	
+	/**
+	 * Arbitrary callback meant to be called when the menu is exited.
+	 * 
+	 * Should typically be called within `onBack`, but depends on the context.
+	 */
+	onExit:Null<()->Void>,
+	
+	/**
+	 * Called when the back button is pressed.
+	 */
+	onBack:Null<()->Void>,
+	
+	/**
+	 * Called every frame.
+	 * 
+	 * @param elapsed The time elapsed since the last frame in seconds.
+	 */
+	onUpdate:Null<(Float)->Void>,
+	
+	/**
+	 * Prevents input for a duration.
+	 * 
+	 * @param duration The debounce time in seconds.
+	 */
+	debounce:(Float)->Void,
+	
+	/**
+	 * Internal sequence for debounce.
+	 */
+	debounceSequence:Null<Dynamic>,
+	
+	/**
+	 * Updates the menu.
+	 * 
+	 * @param elapsed The time elapsed since the last frame in seconds.
+	 */
+	update:(Float)->Void,
+	
+	/**
+	 * Whether the menu exists (or hasn't been destroyed, same thing).
+	 */
+	exists:Bool,
+	
+	/**
+	 * Destroys the menu. Does not destroy the items.
+	 */
+	destroy:()->Void
+}
+
+/**
+ * Data for creating a `MenuObj` object.
+ */
+typedef MenuData = {
+	/**
+	 * Arbitrary custom data attached to the menu.
+	 */
+	data:Null<Dynamic>,
+	
+	/**
+	 * Arbitrary related container object.
+	 */
+	container:Null<FlxBasic>,
+	
+	/**
+	 * The keyboard-based `MenuItem`s to add to the menu, in order.
+	 */
+	items:Null<Array>,
+	
+	/**
+	 * The mouse-based `MenuItem`s to add to the menu.
+	 * 
+	 * The order doesn't matter unless you have items on top of each other,
+	 * in which case the one with the lowest index will be selected (first found in overlap check).
+	 */
+	mouseItems:Null<Array>,
+	
+	/**
+	 * Whether to automatically enable the items when the menu is created.
+	 */
+	autoEnable:Null<Bool>,
+	
+	/**
+	 * The number of columns in the menu.
+	 */
+	sizeX:Null<Int>,
+	
+	/**
+	 * The number of rows in the menu.
+	 */
+	sizeY:Null<Int>,
+	
+	/**
+	 * Whether the menu should wrap around the X axis.
+	 */
+	wrapX:Null<Bool>,
+	
+	/**
+	 * Whether the menu should wrap around the Y axis.
+	 */
+	wrapY:Null<Bool>,
+	
+	/**
+	 * Arbitrary callback meant to be called when the menu is entered.
+	 */
+	onEnter:Null<()->Void>,
+	
+	/**
+	 * Arbitrary callback meant to be called when the menu is exited.
+	 * 
+	 * Should typically be called within `onBack`, but depends on the context.
+	 */
+	onExit:Null<()->Void>,
+	
+	/**
+	 * Called when the back button is pressed.
+	 */
+	onBack:Null<()->Void>,
+	
+	/**
+	 * Called every frame.
+	 * 
+	 * @param elapsed The time elapsed since the last frame in seconds.
+	 */
+	onUpdate:Null<(Float)->Void>
+}
+
+/**
+ * Module for creating `MenuObj` objects.
+ * 
+ * Example:
+ * ```haxe
+ * // Work in progress...
+ * ```
+ */
+class Menu extends ScriptedModule {
+	public function new() {
+		super("be.menu.Menu", -2147483647);
+	}
+	
+	/**
+	 * Creates a new `MenuObj` object.
+	 * 
+	 * Make sure the total number of items is equal to `sizeX * sizeY`!
+	 * 
+	 * @param data The `MenuData` to initialize the menu with.
+	 * @return The new `MenuObj` object.
+	 */
+	public function new_Menu(?data:MenuData):MenuObj {
+		if (data == null) {
+			data = {};
+		}
+		
+		var obj:Dynamic = {
+			data: data.data == null ? {} : data.data,
+			
+			container: data.container,
+			
+			enabled: false,
+			frozen: false,
+			
+			selection: 0,
+			prevSelection: 0,
+			items: data.items == null ? new Array() : data.items,
+			
+			mouseSelection: -1,
+			prevMouseSelection: -1,
+			mouseItems: data.mouseItems == null ? new Array() : data.mouseItems,
+			
+			wrapX: data.wrapX == null ? true : data.wrapX,
+			wrapY: data.wrapY == null ? true : data.wrapY,
+			
+			onEnter: data.onEnter == null ? function():Void {} : data.onEnter,
+			onExit: data.onExit == null ? function():Void {} : data.onExit,
+			onBack: data.onBack == null ? function():Void {} : data.onBack,
+			
+			onUpdate: data.onUpdate == null ? function(elapsed:Float):Void {} : data.onUpdate,
+			
+			exists: true
+		};
+		
+		if (data.autoEnable == null) {
+			data.autoEnable = true;
+		}
+		
+		obj.setSelection = function(selection:Int):Void {
+			if (selection < 0 || selection >= obj.items.length) {
+				return;
+			}
+			
+			var prevItem:Dynamic = obj.items[obj.selection];
+			var curItem:Dynamic = obj.items[selection];
+			
+			obj.selection = selection;
+			
+			prevItem.focused = false;
+			curItem.focused = true;
+			
+			prevItem.onUnfocus(curItem);
+			curItem.onFocus(prevItem);
+		};
+		
+		for (i in 0...obj.items.length) {
+			var item:Dynamic = obj.items[i];
+			
+			item.menu = obj;
+			if (data.autoEnable) {
+				item.enabled = true;
+			}
+			
+			if (i == 0) {
+				item.focused = true;
+			}
+		}
+		
+		obj.sizeX = Std.int(Math.max(1, data.sizeX == null ? 1 : Math.min(obj.items.length, data.sizeX)));
+		
+		var maxRows:Int = Std.int(Math.floor(obj.items.length / obj.sizeX));
+		obj.sizeY = Std.int(Math.max(1, data.sizeY == null ? maxRows : Math.min(maxRows, data.sizeY)));
+		
+		obj.pushItems = function(items:Array<Dynamic>, autoEnable:Bool = true):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			for (i in 0...items.length) {
+				var item:Dynamic = items[i];
+				
+				if (obj.items.length >= obj.sizeX * obj.sizeY) {
+					return;
+				}
+				
+				obj.items.push(item);
+				
+				item.menu = obj;
+				if (autoEnable) {
+					item.enabled = true;
+				}
+				
+				if (obj.items.length == 1) {
+					item.focused = true;
+				}
+			}
+		};
+		
+		for (i in 0...obj.mouseItems.length) {
+			var item:Dynamic = obj.mouseItems[i];
+			
+			item.menu = obj;
+			if (data.autoEnable) {
+				item.enabled = true;
+			}
+		}
+		
+		obj.pushMouseItems = function(items:Array<Dynamic>, autoEnable:Bool = true):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			for (i in 0...items.length) {
+				var item:Dynamic = items[i];
+				
+				obj.mouseItems.push(item);
+				
+				item.menu = obj;
+				if (autoEnable) {
+					item.enabled = true;
+				}
+			}
+		};
+		
+		obj.debounce = function(duration:Float):Void {
+			if (duration < 0 || !obj.exists) {
+				return;
+			}
+			
+			obj.enabled = false;
+			
+			if (obj.debounceSequence != null) {
+				obj.debounceSequence.curTime = 0;
+				obj.debounceSequence.events[0].time = Math.max(obj.debounceSequence.events[0].time, duration);
+			} else {
+				obj.debounceSequence = ModuleHandler.getModule("be.sequence.Sequence").scriptCall("new_Sequence", [[
+					{time: duration, callback: function():Void {
+						obj.enabled = true;
+						
+						obj.debounceSequence = null;
+					}}
+				]]);
+			}
+		};
+		
+		obj.update = function(elapsed:Float):Void {
+			if (obj.frozen || !obj.exists) {
+				return;
+			}
+			
+			if (obj.enabled) {
+				var controls:Controls = PlayerSettings.player1.controls;
+				if (controls != null) {
+					if (controls.BACK) {
+						obj.onBack();
+					} else if (obj.items.length > 0) {
+						var curItem:Dynamic = obj.items[obj.selection];
+						if (controls.check("accept", 2) && curItem.enabled) { // JUST_PRESSED
+							curItem.onPress();
+						} else if (controls.check("accept", -1) && curItem.enabled) { // JUST_RELEASED
+							curItem.onRelease();
+						} else {
+							obj.prevSelection = obj.selection;
+							var prevItem:Dynamic = obj.items[obj.prevSelection];
+							
+							var directions:Array<Bool> = [
+								controls.UI_LEFT_P,
+								controls.UI_DOWN_P,
+								controls.UI_UP_P,
+								controls.UI_RIGHT_P
+							];
+							
+							if (prevItem.autoNavigate) {
+								if (obj.sizeX > 1) {
+									var curRow:Int = Std.int(Math.floor(obj.selection / obj.sizeX));
+									
+									if (directions[0]) {
+										obj.selection -= 1;
+									}
+									
+									if (directions[3]) {
+										obj.selection += 1;
+									}
+									
+									if (obj.wrapX) {
+										obj.selection = curRow * obj.sizeX + (obj.selection + obj.sizeX) % obj.sizeX;
+									} else {
+										obj.selection = Std.int(FlxMath.bound(obj.selection, curRow * sizeX, (curRow + 1) * sizeX - 1));
+									}
+								}
+								
+								if (obj.sizeY > 1) {
+									var curColumn:Int = obj.selection % obj.sizeX;
+									
+									if (directions[2]) {
+										obj.selection -= obj.sizeX;
+									}
+									
+									if (directions[1]) {
+										obj.selection += obj.sizeX;
+									}
+									
+									if (obj.wrapY) {
+										obj.selection = (obj.selection + obj.sizeX * obj.sizeY) % (obj.sizeX * obj.sizeY);
+									} else {
+										obj.selection = Std.int(FlxMath.bound(obj.selection, curColumn, obj.sizeX * (obj.sizeY - 1) + curColumn));
+									}
+								}
+							}
+							
+							var directionTrigger:Bool = false;
+							for (direction in directions) {
+								if (direction) {
+									directionTrigger = true;
+									break;
+								}
+							}
+							
+							if (directionTrigger && prevItem.enabled) {
+								prevItem.onDirection(directions);
+							}
+							
+							if (obj.prevSelection != obj.selection) {
+								curItem = obj.items[obj.selection];
+								
+								prevItem.focused = false;
+								curItem.focused = true;
+								
+								prevItem.onUnfocus(curItem);
+								curItem.onFocus(prevItem);
+							}
+						}
+					}
+				}
+				
+				if (FlxG.mouse.enabled) {
+					var curMouseSelection:Null<Int> = -1;
+					for (i in 0...obj.mouseItems.length) {
+						var item:Dynamic = obj.mouseItems[i];
+						if (item.hitbox == null) {
+							item.hitbox = item.container;
+							if (item.hitbox == null) {
+								continue;
+							}
+						}
+						
+						if (FlxG.mouse.overlaps(item.hitbox)) {
+							curMouseSelection = obj.mouseItems.indexOf(item);
+							item.focused = true;
+							break;
+						}
+					}
+					
+					var curMouseItem:Dynamic = curMouseSelection == -1 ? null : obj.mouseItems[curMouseSelection];
+					if (curMouseSelection != obj.mouseSelection) {
+						obj.prevMouseSelection = obj.mouseSelection;
+						obj.mouseSelection = curMouseSelection;
+						
+						var prevMouseItem:Dynamic = obj.prevMouseSelection == -1 ? null : obj.mouseItems[obj.prevMouseSelection];
+						if (prevMouseItem != null) {
+							prevMouseItem.focused = false;
+							prevMouseItem.onUnfocus(curMouseItem);
+						}
+						
+						if (curMouseItem != null) {
+							curMouseItem.onFocus(prevMouseItem);
+						}
+					}
+					
+					if (curMouseItem != null) {
+						if (FlxG.mouse.justPressed && curMouseItem.enabled) {
+							curMouseItem.onPress();
+						} else if (FlxG.mouse.justReleased && curMouseItem.enabled) {
+							curMouseItem.onRelease();
+						}
+					}
+				}
+			}
+			
+			obj.onUpdate(elapsed);
+			
+			for (item in obj.items) {
+				item.onUpdate(elapsed);
+			}
+			
+			for (item in obj.mouseItems) {
+				item.onUpdate(elapsed);
+			}
+		};
+		
+		obj.destroy = function():Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			if (obj.debounceSequence != null) {
+				obj.debounceSequence.destroy();
+				obj.debounceSequence = null;
+			}
+			
+			toDestroy.remove(obj.destroy);
+			
+			obj.exists = false;
+		};
+		
+		toDestroy.push(obj.destroy);
+		
+		return obj;
+	}
+	
+	private var toDestroy:Array<()->Void> = new Array();
+	override public function onDestroy(event:ScriptEvent):Void {
+		while (toDestroy.length > 0) {
+			toDestroy.pop()();
+		}
+	}
+}

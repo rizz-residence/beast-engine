@@ -1,0 +1,210 @@
+package be.util;
+
+import Float;
+import Int;
+import String;
+
+import flixel.math.FlxPoint;
+
+import funkin.Conductor;
+import funkin.audio.FunkinSound;
+import funkin.data.event.SongEventRegistry;
+import funkin.data.song.SongEventDataRaw;
+import funkin.modding.events.SongEventScriptEvent;
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+import funkin.play.stage.Stage;
+import funkin.util.ReflectUtil;
+
+/**
+ * Song utility module.
+ */
+class SongUtil extends ScriptedModule {
+	public function new() {
+		super("be.util.SongUtil", -2147483648);
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+	}
+	
+	/**
+	 * Calls an event to center the camera between the player and opponent camera focus points.
+	 */
+	public function centerCamera():Void {
+		if (PlayState.instance == null) {
+			return;
+		}
+		
+		var stage:Stage = PlayState.instance.currentStage;
+		if (stage == null || stage.getDad() == null || stage.getBoyfriend() == null) {
+			return;
+		}
+		
+		var opponentFocus:FlxPoint = stage.getDad().cameraFocusPoint;
+		var playerFocus:FlxPoint = stage.getBoyfriend().cameraFocusPoint;
+		doEvent("FocusCamera", {
+			char: -1,
+			x: (opponentFocus.x + playerFocus.x) / 2,
+			y: (opponentFocus.y + playerFocus.y) / 2
+		});
+	}
+	
+	/**
+	 * Attempts to unmute both player and opponent vocals.
+	 */
+	public function unmuteVocals():Void {
+		if (PlayState.instance == null || PlayState.instance.vocals == null) {
+			return;
+		}
+		
+		var opponentVocals:Null<FunkinSound> = PlayState.instance.vocals.getOpponentVoice();
+		if (opponentVocals != null) {
+			opponentVocals.volume = 1;
+		}
+		
+		var playerVocals:Null<FunkinSound> = PlayState.instance.vocals.getPlayerVoice();
+		if (playerVocals != null) {
+			playerVocals.volume = 1;
+		}
+	}
+	
+	/**
+	 * Triggers a song event.
+	 * 
+	 * @param kind The event kind.
+	 * @param value The event data.
+	 */
+	public function doEvent(kind:String, ?value:Dynamic):Void {
+		if (PlayState.instance == null || Conductor.get_instance() == null) {
+			return;
+		}
+		
+		var event:SongEventDataRaw = new SongEventDataRaw(PlayState.instance.songPosition, kind, value);
+		var scriptEvent:SongEventScriptEvent = new SongEventScriptEvent(event);
+		if (!scriptEvent.eventCanceled) {
+			SongEventRegistry.handleEvent(event);
+		}
+		
+		PlayState.instance.dispatchEvent(scriptEvent);
+	}
+	
+	/**
+	 * Gets a `Dynamic` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetDynamic(event:SongEventDataRaw, key:String):Null<Dynamic> {
+		return event.value == null ? null : ReflectUtil.getAnonymousField(event.value, key);
+	}
+	
+	/**
+	 * Gets a `Bool` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetBool(event:SongEventDataRaw, key:String):Null<Bool> {
+		return event.value == null ? null : (ReflectUtil.getAnonymousField(event.value, key) == true);
+	}
+	
+	/**
+	 * Gets an `Int` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetInt(event:SongEventDataRaw, key:String):Null<Int> {
+		if (event.value == null) {
+			return null;
+		}
+		
+		var result:Dynamic = ReflectUtil.getAnonymousField(event.value, key);
+		if (result == null) {
+			return null;
+		}
+		
+		if (Std.isOfType(result, Int)) {
+			return result;
+		}
+		
+		if (Std.isOfType(result, Float)) {
+			return Std.int(result);
+		}
+		
+		if (Std.isOfType(result, String)) {
+			return Std.parseInt(result);
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Gets a `Float` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetFloat(event:SongEventDataRaw, key:String):Null<Float> {
+		if (event.value == null) {
+			return null;
+		}
+		
+		var result:Dynamic = ReflectUtil.getAnonymousField(event.value, key);
+		if (result == null) {
+			return null;
+		}
+		
+		if (Std.isOfType(result, Float)) {
+			return result;
+		}
+		
+		if (Std.isOfType(result, Int)) {
+			return result.toFloat();
+		}
+		
+		if (Std.isOfType(result, String)) {
+			return Std.parseFloat(result);
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Gets a `String` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetString(event:SongEventDataRaw, key:String):Null<String> {
+		return event.value == null ? null : ReflectUtil.getAnonymousField(event.value, key);
+	}
+	
+	/**
+	 * Gets an `Array<Dynamic>` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetArray(event:SongEventDataRaw, key:String):Null<Array<Dynamic>> {
+		return event.value == null ? null : ReflectUtil.getAnonymousField(event.value, key);
+	}
+	
+	/**
+	 * Gets an `Array<Bool>` value from a song event.
+	 * 
+	 * @param event The event to get the value from.
+	 * @param key The key to get the value from.
+	 * @return The value, or `null` if it doesn't exist.
+	 */
+	public function eventGetBoolArray(event:SongEventDataRaw, key:String):Null<Array<Bool>> {
+		return event.value == null ? null : ReflectUtil.getAnonymousField(event.value, key);
+	}
+}

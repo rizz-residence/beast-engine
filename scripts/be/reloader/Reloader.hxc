@@ -1,0 +1,210 @@
+package be.reloader;
+
+import Float;
+import Int;
+import String;
+
+import haxe.ds.ArraySort;
+import haxe.ds.StringMap;
+
+import thx.Types;
+
+import flixel.FlxG;
+
+import funkin.modding.base.ScriptedMusicBeatState;
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+
+/**
+ * Data for reloading a module.
+ */
+typedef ReloadData = {
+	/**
+	 * The priority of the reload, where lower numbers are reloaded first.
+	 * If null, the order is random but after all non-null priorities.
+	 * 
+	 * `reloadPre` and `reloadPost` priorities are separate.
+	 */
+	priority:Null<Int>,
+	
+	/**
+	 * The name of the callback to call after reloading.
+	 * Useful for "re-initializing" things.
+	 * 
+	 * The module should be re-registered with `Reloader` in this callback.
+	 * If not, make sure to do it somewhere else or the module won't be reloaded again.
+	 */
+	callback:Null<String>,
+	
+	/**
+	 * A function that returns a map of the module's variable names to their references,
+	 * to "persist" the variables across reloads.
+	 * 
+	 * It's set up this way because when this function tries to access the variables
+	 * defined in it, the references are actually to the old module, so even though the
+	 * reloaded module has the values reset, we can still access the old values.
+	 */
+	variables:Null<()->StringMap>
+}
+
+/**
+ * Helps make polymod hot-reloading less annoying when deaing with modules and scripted states.
+ * 
+ * Example:
+ * ```haxe
+ * package exampleMod;
+ * 
+ * import haxe.ds.StringMap;
+ * 
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.modding.module.ScriptedModule;
+ * 
+ * class ExampleModule extends ScriptedModule {
+ *     public function new() {
+ *         super("exampleMod.ExampleModule");
+ *     }
+ *     
+ *     // Target variable to persist across reloads.
+ *     public var exampleVariable:Int = 0;
+ *     
+ *     override public function onCreate(event:ScriptEvent):Void {
+ *         exampleFunction();
+ *         hook();
+ *     }
+ *     
+ *     private function hook():Void {
+ *         // Registering the module with `Reloader`.
+ *         ModuleHandler.getModule("be.reloader.Reloader").scriptGet("reloadPre").set("exampleMod.ExampleModule", {
+ *             priority: 0,
+ *             callback: "onReload",
+ *             variables: function():StringMap {
+ *                 return [
+ *                     // The reference to the variable (of this module's instance) persists across the reload.
+ *                     "exampleVariable" => exampleVariable
+ *                 ];
+ *             }
+ *         });
+ *     }
+ *     
+ *     public function onReload():Void {
+ *         exampleFunction();
+ *         
+ *         // Important to re-register the module with `Reloader`!
+ *         hook();
+ *     }
+ *     
+ *     private function exampleFunction():Void {
+ *         exampleVariable++;
+ *         
+ *         // This should increment with each reload since the variable persists via `Reloader`.
+ *         trace("exampleMod.ExampleModule: exampleVariable = " + Std.string(exampleVariable));
+ *     }
+ * }
+ * ```
+ */
+class Reloader extends ScriptedModule {
+	public function new() {
+		super("be.reloader.Reloader", -2147483648);
+	}
+	
+	/**
+	 * The target ScriptedMusicBeatState to initialize and switch to after reloading.
+	 */
+	public var targetState:Null<String> = null;
+	
+	/**
+	 * Map of modules to "reload" before switching states on reload.
+	 */
+	public var reloadPre:StringMap<ReloadData> = new StringMap();
+	
+	/**
+	 * Map of modules to "reload" after switching states on reload.
+	 */
+	public var reloadPost:StringMap<ReloadData> = new StringMap();
+	
+	private var reload:(StringMap<ReloadData>)->Void = function(reloadData:StringMap<ReloadData>):Void {
+		reloadData = reloadData.copy();
+		
+		var sorted:Array<String> = new Array();
+		for (module in reloadData.keys()) {
+			if (Types.isAnonymousObject(reloadData.get(module)) && ModuleHandler.getModule(module) != null) { 
+				sorted.push(module);
+			}
+		}
+		
+		ArraySort.sort(sorted, function(a:String, b:String):Int {
+			var priorityA:Null<Int> = parsePriority(reloadData.get(a).priority);
+			var priorityB:Null<Int> = parsePriority(reloadData.get(b).priority);
+			
+			if (priorityA == null && priorityB == null) {
+				return 0;
+			} else if (priorityA == null) {
+				return 1;
+			} else if (priorityB == null) {
+				return -1;
+			}
+			
+			return priorityA - priorityB;
+		});
+		
+		for (i in 0...sorted.length) {
+			var module:String = sorted[i];
+			
+			trace("beast-engine: Reloading module \"" + module + "\"...");
+			
+			var data:ReloadData = reloadData.get(module);
+			if (data.variables != null) {
+				var variables:StringMap<Dynamic> = data.variables();
+				for (key in variables.keys()) {
+					ModuleHandler.getModule(module).scriptSet(key, variables.get(key));
+				}
+			}
+			
+			if (data.callback != null) {
+				ModuleHandler.getModule(module).scriptCall(data.callback);
+			}
+		}
+	}
+	
+	private var pressedReload:Bool = false;
+	override public function onUpdate(event:UpdateScriptEvent):Void {
+		pressedReload = FlxG.keys.justPressed.F5;
+	}
+	
+	override public function onDestroy(event:ScriptEvent):Void {
+		if (
+			(PlayState.instance != null && PlayState.instance.criticalFailure) ||
+			(!FlxG.keys.justPressed.F5 && !pressedReload)
+		) {
+			return;
+		}
+		
+		FlxG.signals.preStateSwitch.addOnce(function():Void {
+			trace("beast-engine: Starting pre-switch reload.");
+			reload(reloadPre);
+			trace("beast-engine: Pre-switch reload complete.");
+		});
+		
+		FlxG.signals.postStateSwitch.addOnce(function():Void {
+			trace("beast-engine: Starting post-switch reload.");
+			reload(reloadPost);
+			trace("beast-engine: Post-switch reload complete.");
+			
+			if (targetState != null) {
+				trace("beast-engine: Switching to target state \"" + targetState + "\"...");
+				FlxG.switchState(ScriptedMusicBeatState.init(targetState));
+			}
+		});
+	}
+	
+	private function parsePriority(value:Dynamic):Null<Int> {
+		if (Std.isOfType(value, Int) || Std.isOfType(value, Float)) {
+			return Std.int(value);
+		} else if (Std.isOfType(value, String)) {
+			return Std.parseInt(value);
+		}
+		
+		return null;
+	}
+}

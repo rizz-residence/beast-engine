@@ -1,0 +1,103 @@
+package be.song.notekinds;
+
+import flixel.FlxG;
+
+import funkin.Paths;
+import funkin.audio.FunkinSound;
+import funkin.play.PlayState;
+import funkin.play.notes.notekind.ScriptedNoteKind;
+
+/**
+ * A note kind that causes the note to be "missed" by the player or opponent.
+ * 
+ * This note kind has the following parameters:
+ * - keepPenalty: Whether to keep the penalty for missing the note (so actually missing the note).
+ * - playMissAnimation: Whether to play the miss animation for the respective character. Does not affect the player if `keepPenalty` is true.
+ * - playMissSound: Whether to play the miss sound for this note.
+ * - muteVocals: Whether to mute the vocals for the respective character.
+ * - goTransparent: Whether to make the note transparent like when a combo breaks.
+ */
+class MissNote extends ScriptedNoteKind {
+	public function new() {
+		super("be.song.notekinds.MissNote", "Miss Note");
+	}
+	
+	private var paramDefaults:Dynamic = {
+		keepPenalty: false,
+		
+		playMissAnimation: true,
+		playMissSound: false,
+		
+		muteVocals: false,
+		
+		goTransparent: true
+	}
+	
+	override public function onNoteIncoming(event:NoteScriptEvent):Void {
+		if (event.note.get_kind() != "be.song.notekinds.MissNote") {
+			return;
+		}
+		
+		event.note.params = [
+			{name: "keepPenalty", value: paramDefaults.keepPenalty},
+			
+			{name: "playMissAnimation", value: paramDefaults.playMissAnimation},
+			{name: "playMissSound", value: paramDefaults.playMissSound},
+			
+			{name: "muteVocals", value: paramDefaults.muteVocals},
+			
+			{name: "goTransparent", value: paramDefaults.goTransparent}
+		];
+	}
+	
+	override public function onNoteHit(event:HitNoteScriptEvent):Void {
+		if (event.note.get_kind() != "be.song.notekinds.MissNote") {
+			return;
+		}
+		
+		if (!event.note.noteData.getMustHitNote()) {
+			if (event.note.params[1].value) { // playMissAnimation
+				PlayState.instance.currentStage.getOpponent().onNoteMiss(event);
+			}
+			
+			if (event.note.params[2].value) { // playMissSound
+				FunkinSound.playOnce(Paths.soundRandom("missnote", 1, 3), FlxG.random.float(0.5, 0.6));
+			}
+			
+			if (event.note.params[3].value) { // muteVocals
+				PlayState.instance.vocals.opponentVolume = 0;
+			}
+			
+			event.note.hasBeenHit = true;
+		}
+		
+		if (event.note.params[4].value) { // goTransparent
+			event.note.alpha = 0.5;
+			event.note.desaturate();
+		}
+		
+		event.note.lowPriority = true;
+		
+		event.cancelEvent();
+	}
+	
+	override public function onNoteMiss(event:NoteScriptEvent):Void {
+		if (event.note.get_kind() != "be.song.notekinds.MissNote") {
+			return;
+		}
+		
+		if (!event.note.params[0].value) { // keepPenalty
+			if (event.note.params[1].value) { // playMissAnimation
+				PlayState.instance.currentStage.getPlayer().onNoteMiss(event);
+			}
+			
+			if (event.note.params[3].value) { // muteVocals
+				PlayState.instance.vocals.playerVolume = 0;
+			}
+			
+			event.cancelEvent();
+		}
+		
+		event.playSound = event.note.params[2].value; // playMissSound
+	}
+}

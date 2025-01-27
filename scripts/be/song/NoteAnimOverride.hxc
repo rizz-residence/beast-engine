@@ -1,0 +1,123 @@
+package be.song;
+
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+import funkin.play.character.BaseCharacter;
+
+typedef ExclusionData = {
+	ignoreExclusionPref:Array<String>,
+	canPlayOtherAnims:Bool
+}
+
+/**
+ * Helper module for overriding note singing animations.
+ * 
+ * Set up your note kinds like this:
+ * ```haxe
+ * package exampleMod.song.notekinds;
+ * 
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.play.character.BaseCharacter;
+ * import funkin.play.notes.notekind.ScriptedNoteKind;
+ * 
+ * class ExampleNote extends ScriptedNoteKind {
+ *     public function new() {
+ *         super("exampleMod.song.notekinds.ExampleNote", "Example Note");
+ *     }
+ *     
+ *     override public function onNoteHit(event:HitNoteScriptEvent):Void {
+ *         ModuleHandler.getModule("be.song.NoteAnimOverride").scriptCall("overrideHit", [
+ *             event,
+ *             "exampleMod.song.notekinds.ExampleNote",
+ *             function(targetCharacter:BaseCharacter):Void {
+ *                 targetCharacter.holdTimer = 0;
+ *                 targetCharacter.playSingAnimation(event.note.noteData.getDirection(), false, "exampleSuffix");
+ *             }
+ *         ]);
+ *     }
+ * }
+ * ```
+ */
+class NoteAnimOverride extends ScriptedModule {
+	public function new() {
+		super("be.song.NoteAnimOverride", -2147483648);
+	}
+	
+	/**
+	 * Overrides the singing animation for the note.
+	 * 
+	 * @param event The event that triggered the note hit.
+	 * @param kind Your note kind ID.
+	 * @param callback The callback to run with the target character. This is where you play your own animation.
+	 */
+	public function overrideHit(event:HitNoteScriptEvent, kind:String, callback:(BaseCharacter)->Void):Void {
+		if (event.note.noteData.get_kind() != kind) {
+			if (event.note.noteData.getMustHitNote()) {
+				tryClearPlayerExclusion();
+			} else {
+				tryClearOpponentExclusion();
+			}
+			
+			return;
+		}
+		
+		var targetCharacter:BaseCharacter = null;
+		if (event.note.noteData.getMustHitNote()) {
+			targetCharacter = PlayState.instance.currentStage.getPlayer();
+			playerExclusion = {
+				ignoreExclusionPref: targetCharacter.ignoreExclusionPref,
+				canPlayOtherAnims: targetCharacter.canPlayOtherAnims
+			};
+		} else {
+			targetCharacter = PlayState.instance.currentStage.getOpponent();
+			opponentExclusion = {
+				ignoreExclusionPref: targetCharacter.ignoreExclusionPref,
+				canPlayOtherAnims: targetCharacter.canPlayOtherAnims
+			};
+		}
+		
+		callback(targetCharacter);
+		
+		targetCharacter.ignoreExclusionPref = new Array();
+		targetCharacter.canPlayOtherAnims = false;
+	}
+	
+	private var opponentExclusion:Null<ExclusionData> = null;
+	private var playerExclusion:Null<ExclusionData> = null;
+	
+	override public function onUpdate(event:UpdateScriptEvent):Void {
+		tryClearPlayerExclusion();
+		tryClearOpponentExclusion();
+	}
+	
+	private function tryClearPlayerExclusion():Void {
+		if (playerExclusion == null) {
+			return;
+		}
+		
+		var targetCharacter:BaseCharacter = PlayState.instance.currentStage.getPlayer();
+		
+		targetCharacter.ignoreExclusionPref = playerExclusion.ignoreExclusionPref;
+		if (playerExclusion.canPlayOtherAnims) {
+			targetCharacter.canPlayOtherAnims = true;
+		}
+		
+		playerExclusion = null;
+	}
+	
+	private function tryClearOpponentExclusion():Void {
+		if (opponentExclusion == null) {
+			return;
+		}
+		
+		var targetCharacter:BaseCharacter = PlayState.instance.currentStage.getOpponent();
+		
+		targetCharacter.ignoreExclusionPref = opponentExclusion.ignoreExclusionPref;
+		if (opponentExclusion.canPlayOtherAnims) {
+			targetCharacter.canPlayOtherAnims = true;
+		}
+		
+		opponentExclusion = null;
+	}
+}

@@ -1,0 +1,429 @@
+package be.math;
+
+import String;
+
+import flixel.FlxG;
+import flixel.tweens.FlxTween;
+import flixel.tweens.misc.NumTween;
+
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.util.MathUtil;
+
+/**
+ * An object that represents a value that can be manipulated in various ways.
+ * 
+ * Used in `be.neocam.Neocam` for camera properties, but this class is generic and can be used however you like.
+ */
+typedef MovingValObj = {
+	/**
+	 * The current unapplied value.
+	 * 
+	 * Use `set_cur` to set this value if you want `locked` to be respected.
+	 */
+	cur:Float,
+	
+	/**
+	 * Attempts to set the `cur` value, respecting `locked`.
+	 * 
+	 * @param value	The value to set `cur` to.
+	 * @return The `cur` value afterwards. If `locked`, this is `cur`, otherwise it is `value`.
+	 */
+	set_cur:(Float)->Float,
+	
+	/**
+	 * The target value that `cur` will exponentially decay towards over time,
+	 * based on `halfLife`.
+	 * 
+	 * Use `set_target` to set this value if you want `locked` to be respected.
+	 */
+	target:Float,
+	
+	/**
+	 * Attempts to set the `target` value, respecting `locked`.
+	 * 
+	 * @param value	The value to set `target` to.
+	 * @return The `target` value afterwards. If `locked`, this is `target`, otherwise it is `value`.
+	 */
+	set_target:(Float)->Float,
+	
+	/**
+	 * The value that updates to `cur` at a rate determined by `fps`.
+	 * 
+	 * Use `set_applied` to set this value if you want `locked` to be respected.
+	 */
+	applied:Float,
+	
+	/**
+	 * Attempts to set the `applied` value, respecting `locked`.
+	 * 
+	 * @param value	The value to set `applied` to.
+	 * @return The `applied` value afterwards. If `locked`, this is `applied`, otherwise it is `value`.
+	 */
+	set_applied:(Float)->Float,
+	
+	/**
+	 * The half-life in seconds of the exponential decay of `cur` towards `target`.
+	 * 
+	 * Use `set_halfLife` to set this value if you want `locked` to be respected.
+	 */
+	halfLife:Float,
+	
+	/**
+	 * Attempts to set the `halfLife` value, respecting `locked`.
+	 * 
+	 * @param value	The value to set `halfLife` to.
+	 * @return The `halfLife` value afterwards. If `locked`, this is `halfLife`, otherwise it is `value`.
+	 */
+	set_halfLife:(Float)->Float,
+	
+	/**
+	 * The number of frames per second that `applied` updates to `cur`.
+	 * If it exceeds the game's frame rate, it will just update every frame.
+	 * 
+	 * Use `set_fps` to set this value if you want `locked` to be respected.
+	 */
+	fps:Float,
+	
+	/**
+	 * Attempts to set the `fps` value, respecting `locked`.
+	 * 
+	 * @param value	The value to set `fps` to.
+	 * @return The `fps` value afterwards. If `locked`, this is `fps`, otherwise it is `value`.
+	 */
+	set_fps:(Float)->Float,
+	
+	/**
+	 * Internal clock for updating `applied`.
+	 */
+	tick:Float,
+	
+	/**
+	 * Snaps `cur`, `target`, and optionally `applied` to a value, respecting `locked`.
+	 * 
+	 * Basically a helper method for calling `set_cur`, `set_target`, and `set_applied` at once.
+	 * 
+	 * @param value The value to snap to.
+	 * @param alsoApplied Whether to snap `applied` to the value as well. Defaults to `false`.
+	 * @return The `cur` value afterwards. If `locked`, this is `cur`, otherwise it is `value`.
+	 */
+	snap:(Float, Null<Bool>)->Float,
+	
+	/**
+	 * Tweens `target` to a value over a duration, respecting `locked`.
+	 * 
+	 * @param start The starting value of the tween. Defaults to `target`.
+	 * @param goal The target value of the tween.
+	 * @param duration The duration of the tween in seconds. If `0`, the tween completes instantly. Defaults to `0`.
+	 * @param ease The tween easing function. Can be a string or a custom `EaseFunction`. Defaults to linear.
+	 */
+	tween:(Null<Float>, Float, Null<Float>, Dynamic)->Void,
+	
+	/**
+	 * Cancels the active tween, if any.
+	 */
+	cancelTween:()->Void,
+	
+	/**
+	 * Internal tween object for tweening `target`.
+	 */
+	activeTween:Null<NumTween>,
+	
+	/**
+	 * Whether the value is locked and cannot be changed manually.
+	 * The decay and tween will still continue if `true`.
+	 */
+	locked:Bool,
+	
+	/**
+	 * Whether the value is paused and will not update.
+	 * Affects both the decay and tween.
+	 */
+	paused:Bool,
+	
+	/**
+	 * Internal flag for whether the object should shake `applied`.
+	 */
+	shake:Bool,
+	
+	/**
+	 * Update function that should be called every frame.
+	 * 
+	 * @param elapsed The time elapsed since the last frame in seconds.
+	 */
+	update:(Float)->Void,
+	
+	/**
+	 * Internal flag for whether the object exists.
+	 */
+	exists:Bool,
+	
+	/**
+	 * Destroys the object and cancels the active tween.
+	 */
+	destroy:()->Void
+}
+
+/**
+ * Data for creating a `MovingValObj` object.
+ */
+typedef MovingValData = {
+	/**
+	 * The initial `cur` value.
+	 * Defaults to `0`.
+	 */
+	cur:Null<Float>,
+	
+	/**
+	 * The initial `target` value.
+	 * Defaults to `cur`.
+	 */
+	target:Null<Float>,
+	
+	/**
+	 * The initial `applied` value.
+	 * Defaults to `cur`.
+	 */
+	applied:Null<Float>,
+	
+	/**
+	 * The initial `halfLife` value.
+	 * Defaults to `1`.
+	 */
+	halfLife:Null<Float>,
+	
+	/**
+	 * The initial `fps` value.
+	 * Defaults to `1000`.
+	 */
+	fps:Null<Float>,
+	
+	/**
+	 * Whether the value is initially locked.
+	 */
+	locked:Null<Bool>,
+	
+	/**
+	 * Whether the value is initially paused.
+	 */
+	paused:Null<Bool>,
+	
+	/**
+	 * Whether to apply a random shake to `applied` during update.
+	 */
+	shake:Null<Bool>
+}
+
+/**
+ * Module for creating `MovingValObj` objects.
+ * 
+ * Example:
+ * ```haxe
+ * package exampleMod;
+ * 
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.modding.module.ScriptedModule;
+ * 
+ * class ExampleModule extends ScriptedModule {
+ *     public function new() {
+ *         super("exampleMod.ExampleModule");
+ *     }
+ *     
+ *     private var exampleValue:Dynamic = null;
+ *     override public function onCreate(event:ScriptEvent):Void {
+ *         exampleValue = ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
+ *             halfLife: 0.5,
+ *             fps: 10
+ *         }]);
+ *         
+ *         ModuleHandler.getModule("be.sequence.Sequence").scriptCall("new_Sequence", [[
+ *             {time: 0.5, callback: function():Void {
+ *                 exampleValue.tween(null, 100, 2, "cubeout");
+ *             },
+ *             
+ *             {time: 3, callback: function():Void {
+ *                 exampleValue.tween(null, 0, 2, "cubeout");
+ *             },
+ *             
+ *             {time: 5.5, callback: function():Void {
+ *                 exampleValue.destroy();
+ *                 exampleValue = null;
+ *             }
+ *         ]]);
+ *     }
+ *     
+ *     override public function onUpdate(event:UpdateScriptEvent):Void {
+ *         if (exampleValue == null) {
+ *             return;
+ *         }
+ *         
+ *         exampleValue.update(event.elapsed);
+ *         
+ *         trace(exampleValue.applied);
+ *     }
+ * }
+ * ```
+ */
+class MovingVal extends ScriptedModule {
+	public function new() {
+		super("be.math.MovingVal", -2147483647);
+	}
+	
+	/**
+	 * Creates a new `MovingValObj` object.
+	 * 
+	 * @param data The `MovingValData` to initialize the object with.
+	 * @return The new `MovingValObj` object.
+	 */
+	public function new_MovingVal(?data:MovingValData):MovingValObj {
+		if (data == null) {
+			data = {};
+		}
+		
+		var obj:Dynamic = {
+			cur: data.cur == null ? 0 : data.cur,
+			
+			halfLife: data.halfLife == null ? 1 : data.halfLife,
+			
+			fps: data.fps == null ? 1000 : data.fps,
+			tick: 0,
+			
+			locked: data.locked == null ? false : data.locked,
+			paused: data.paused == null ? false : data.paused,
+			
+			shake: data.shake == null ? false : data.shake,
+			
+			exists: true
+		};
+		
+		obj.target = data.target == null ? obj.cur : data.target;
+		obj.applied = data.applied == null ? obj.cur : data.applied;
+		
+		obj.set_cur = function(value:Float):Float {
+			if (obj.locked || value == null || !obj.exists) {
+				return obj.cur;
+			}
+			
+			return obj.cur = value;
+		};
+		
+		obj.set_target = function(value:Float):Float {
+			if (obj.locked || value == null || !obj.exists) {
+				return obj.target;
+			}
+			
+			return obj.target = value;
+		};
+		
+		obj.set_applied = function(value:Float):Float {
+			if (obj.locked || value == null || !obj.exists) {
+				return obj.applied;
+			}
+			
+			return obj.applied = value;
+		};
+		
+		obj.set_halfLife = function(value:Float):Float {
+			if (obj.locked || value == null || !obj.exists) {
+				return obj.halfLife;
+			}
+			
+			return obj.halfLife = value;
+		};
+		
+		obj.set_fps = function(value:Float):Float {
+			if (obj.locked || value == null || value <= 0 || !obj.exists) {
+				return obj.fps;
+			}
+			
+			return obj.fps = value;
+		};
+		
+		obj.snap = function(value:Float, alsoApplied:Bool = false):Float {
+			obj.set_cur(value);
+			obj.set_target(value);
+			if (alsoApplied) {
+				obj.set_applied(value);
+			}
+			
+			return obj.cur;
+		};
+		
+		obj.tween = function(?start:Float, goal:Float, duration:Float = 0, ease:Dynamic):Void {
+			if (obj.locked || goal == null || !obj.exists) {
+				return;
+			}
+			
+			if (duration <= 0) {
+				obj.cancelTween();
+				
+				obj.set_target(goal);
+				return;
+			}
+			
+			if (start == null) {
+				start = obj.target;
+			}
+			
+			if (ease == null || Std.isOfType(ease, String)) {
+				ease = ModuleHandler.getModule("be.util.GenUtil").scriptCall("getEase", [ease]);
+			}
+			
+			obj.cancelTween();
+			obj.activeTween = FlxTween.num(start, goal, duration, {ease: ease}, function(v:Float):Void {
+				obj.target = v;
+			});
+		};
+		
+		obj.cancelTween = function():Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			if (obj.activeTween != null) {
+				obj.activeTween.cancel();
+				obj.activeTween.destroy();
+				obj.activeTween = null;
+			}
+		};
+		
+		obj.update = function(elapsed:Float):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			if (obj.activeTween != null) {
+				obj.activeTween.active = !obj.paused;
+			}
+			
+			if (obj.paused) {
+				return;
+			}
+			
+			obj.cur = ModuleHandler.getModule("be.util.MathUtil").scriptCall("smoothLerpDecay", [obj.cur, obj.target, elapsed, obj.halfLife]);
+			
+			obj.tick += elapsed;
+			if (obj.tick >= 1 / obj.fps) {
+				obj.tick %= 1 / obj.fps;
+				
+				if (obj.shake) {
+					obj.applied = FlxG.random.float(-obj.cur, obj.cur);
+				} else {
+					obj.applied = obj.cur;
+				}
+			}
+		};
+		
+		obj.destroy = function():Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			obj.cancelTween();
+			
+			obj.exists = false;
+		};
+		
+		return obj;
+	}
+}

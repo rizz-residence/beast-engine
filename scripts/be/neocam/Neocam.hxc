@@ -1,0 +1,777 @@
+package be.neocam;
+
+import haxe.ds.IntMap;
+import haxe.ds.StringMap;
+
+import flixel.FlxG;
+import flixel.FlxCamera;
+import flixel.tweens.FlxTween;
+
+import funkin.Conductor;
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+import funkin.util.Constants;
+
+/**
+ * A versatile camera controller object.
+ */
+typedef NeocamObj = {
+	/**
+	 * The target camera to control.
+	 */
+	parent:FlxCamera,
+	
+	/**
+	 * Whether the controller should affect the camera.
+	 * 
+	 * The controller still updates in the background when disabled.
+	 */
+	enabled:Bool,
+	
+	/**
+	 * Internal flag for whether the controller values should freeze.
+	 */
+	paused:Bool,
+	
+	/**
+	 * Whether the camera is a game camera (affected by song events).
+	 */
+	gameCamera:Bool,
+	
+	/**
+	 * Object holding `x` and `y` `MovingVal`s for the camera's position.
+	 */
+	position:Dynamic,
+	
+	/**
+	 * Object holding `x` and `y` shaking `MovingVal`s for the camera's position.
+	 */
+	positionShake:Dynamic,
+	
+	/**
+	 * Object holding `x` and `y` `MovingVal`s for offsetting the camera's position.
+	 */
+	offset:Dynamic,
+	
+	/**
+	 * Object holding `x` and `y` shaking `MovingVal`s for offsetting the camera's position.
+	 */
+	offsetShake:Dynamic,
+	
+	/**
+	 * `MovingVal` for the camera's zoom.
+	 */
+	zoom:Dynamic,
+	
+	/**
+	 * Shaking `MovingVal` for the camera's zoom.
+	 */
+	zoomShake:Dynamic,
+	
+	/**
+	 * `MovingVal` for the camera's alpha.
+	 */
+	alpha:Dynamic,
+	
+	/**
+	 * The magnitude of the position offset when a character hits a note, in pixels.
+	 */
+	noteOffsetScale:Float,
+	
+	/**
+	 * Whether the note offset takes into account the camera's zoom.
+	 */
+	noteOffsetRelative:Bool,
+	
+	/**
+	 * Internal `MovingVal` for the note offset.
+	 */
+	noteOffset:Dynamic,
+	
+	/**
+	 * Helper function map for doing preset things with the camera.
+	 * 
+	 * Example:
+	 * ```haxe
+	 * ncGame.targets.set("focusSky", function():Void {
+	 *    ncGame.position.x.tween(null, 0, 1, "cubeout");
+	 *    ncGame.position.y.tween(null, -400, 2, "quartout");
+	 *    ncGame.zoom.tween(null, 0.75, 2, "quartout");
+	 * });
+	 * 
+	 * ncGame.targets.set("explosionShake", function():Void {
+	 *     ncGame.positionShake.x.set_fps(24);
+	 *     ncGame.positionShake.x.set_halfLife(0.5);
+	 *     ncGame.positionShake.x.snap(10, true);
+	 *     ncGame.positionShake.x.set_target(0);
+	 *     
+	 *     ncGame.positionShake.y.set_fps(24);
+	 *     ncGame.positionShake.y.set_halfLife(0.5);
+	 *     ncGame.positionShake.y.snap(10, true);
+	 *     ncGame.positionShake.y.set_target(0);
+	 * });
+	 * 
+	 * // Later...
+	 * ncGame.targets.get("focusSky")();
+	 * ncGame.targets.get("explosionShake")();
+	 * ```
+	 */
+	targets:StringMap<()->Void>,
+	
+	/**
+	 * Add to the camera zoom `cur` value.
+	 * 
+	 * @param amount The amount to add to the zoom, giving a "bump" effect.
+	 * @param relative Whether to add the amount as a multiplier `cur * (1 + amount)` or as an addition `cur + amount`.
+	 */
+	bump:(Float, Bool)->Void,
+	
+	/**
+	 * The current step bump pattern, a map of step indices to bump amounts.
+	 */
+	bumpPattern:IntMap<Float>,
+	
+	/**
+	 * Internal value for the starting step of the bump pattern, relative to the song.
+	 */
+	bumpPatternStart:Int,
+	
+	/**
+	 * Internal value for the length of the bump pattern in steps before it loops.
+	 * Default is the highest index of `bumpPattern`, unless otherwise specified in `setBumpPattern`.
+	 */
+	bumpPatternLength:Int,
+	
+	/**
+	 * Whether the bump pattern is relative to the camera zoom.
+	 */
+	bumpPatternRelative:Bool,
+	
+	/**
+	 * Set a looping camera bump pattern for use during songs, based on steps.
+	 * 
+	 * @param pattern A map of step indices to zoom bump amounts.
+	 * @param length The length of the pattern in steps before looping. If not provided, it's the highest index of `pattern`
+	 * @param start Optionally change the relative starting step of the pattern.
+	 * @param relative Whether to flag the pattern as relative to the camera zoom.
+	 */
+	setBumpPattern:(IntMap<Float>, Int, Bool)->Void,
+	
+	/**
+	 * Internal callback for the note offset when a note is hit.
+	 */
+	onNoteHit:(HitNoteScriptEvent)->Void,
+	
+	/**
+	 * Internal callback for resetting the note offset when a note is missed.
+	 */
+	onNoteMiss:()->Void,
+	
+	/**
+	 * Internal callback for step-related events like camera bump.
+	 */
+	onStepHit:(SongTimeScriptEvent)->Void,
+	
+	/**
+	 * Internal callback to replicate the behavior of camera song events with the controller.
+	 */
+	onSongEvent:(SongEventScriptEvent)->Void,
+	
+	/**
+	 * Internal callback for updating the camera controller.
+	 * 
+	 * Added to the `FlxG.signals.postUpdate` signal, so be very sure to destroy the controller when it's no longer needed or else
+	 * you'll have an unreferenced controller wasting resources... This is attempted to be mitigated by this module's `onDestroy` function,
+	 * but you should still try to dispose of the controller properly.
+	 */
+	onUpdate:(Float)->Void,
+	
+	/**
+	 * Internal flag for whether the object exists.
+	 */
+	exists:Bool,
+	
+	/**
+	 * Destroy the camera controller and remove its update signal.
+	 */
+	destroy:()->Void
+}
+
+/**
+ * Data for creating a `NeocamObj` object.
+ */
+typedef NeocamData = {
+	/**
+	 * The target camera to control.
+	 */
+	parent:FlxCamera,
+	
+	/**
+	 * Optional starting position for the camera.
+	 * Defaults to the parent camera's current position, or the origin if not provided.
+	 */
+	startPosition:Null<FlxPoint>,
+	
+	/**
+	 * Optional starting zoom for the camera.
+	 * Defaults to the parent camera's current zoom, or `1` if not provided.
+	 */
+	startZoom:Null<Float>,
+	
+	/**
+	 * Whether the camera is a game camera (should be affected by song events).
+	 */
+	gameCamera:Bool,
+	
+	/**
+	 * The magnitude of the position offset when a character hits a note, in pixels.
+	 */
+	noteOffsetScale:Float,
+	
+	/**
+	 * Whether the note offset takes into account the camera's zoom.
+	 */
+	noteOffsetRelative:Bool,
+	
+	/**
+	 * Optional starting note offset for the camera.
+	 * Defaults to the basic 1-measure pattern used in the game.
+	 */
+	startBumpPattern:Null<IntMap>
+}
+
+/**
+ * A module for controlling cameras.
+ * 
+ * Example:
+ * ```haxe
+ * package exampleMod.states;
+ * 
+ * import flixel.FlxG;
+ * 
+ * import funkin.graphics.FunkinCamera;
+ * import funkin.modding.base.ScriptedMusicBeatState;
+ * import funkin.modding.module.ModuleHandler;
+ * 
+ * class exampleState extends ScriptedMusicBeatState {
+ *     private var camera:FunkinCamera = null;
+ *     private var controller:Dynamic = null;
+ *     
+ *     override public function create():Void {
+ *         super.create();
+ *         
+ *         camera = new FunkinCamera("exampleMod: exampleState camera", 0, 0, 1280, 720, 1);
+ *         FlxG.cameras.add(camera, true);
+ *         
+ *         controller = ModuleHandler.getModule("be.neocam.Neocam").scriptCall("new_Neocam", [{
+ *             parent: camera
+ *         }]);
+ *         
+ *         controller.position.x.set_halfLife(0.2);
+ *         controller.position.y.set_halfLife(0.2);
+ *     }
+ *     
+ *     private var tick:Float = 0;
+ *     override public function update(elapsed:Float):Void {
+ *         super.update(elapsed);
+ *         
+ *         tick += elapsed;
+ *         
+ *         controller.position.x.set_target(Math.cos(tick) * 50);
+ *         controller.position.y.set_target(Math.sin(tick) * 50);
+ *     }
+ *     
+ *     override public function destroy():Void {
+ *         super.destroy();
+ *         
+ *         FlxG.cameras.remove(camera);
+ *         camera.destroy();
+ *     }
+ * }
+ * ```
+ */
+class Neocam extends ScriptedModule {
+	public function new() {
+		super("be.neocam.Neocam", -2147483646);
+	}
+	
+	/**
+	 * Creates a new `NeocamObj` camera controller object.
+	 * 
+	 * @param data The `NeocamData` to initialize the controller with.
+	 * @return The new `NeocamObj` object.
+	 */
+	public function new_Neocam(?data:NeocamData):NeocamObj {
+		if (data == null) {
+			data = {};
+		}
+		
+		var obj:Dynamic = {
+			parent: data.parent,
+			
+			enabled: true,
+			paused: false,
+			
+			gameCamera: data.gameCamera == null ? false : data.gameCamera,
+			
+			position: {
+				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
+					cur: data.startPosition == null ? (data.parent == null ? 0 : data.parent.scroll.x) : data.startPosition.x
+				}]),
+				
+				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
+					cur: data.startPosition == null ? (data.parent == null ? 0 : data.parent.scroll.y) : data.startPosition.y
+				}])
+			},
+			
+			positionShake: {
+				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{shake: true}]),
+				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{shake: true}])
+			},
+			
+			offset: {
+				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal"),
+				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal")
+			},
+			
+			offsetShake: {
+				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{shake: true}]),
+				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{shake: true}])
+			},
+			
+			zoom: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
+				cur: data.startZoom == null ? (data.parent == null ? 1 : data.parent.zoom) : data.startZoom
+			}]),
+			
+			zoomShake: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{shake: true}]),
+			
+			alpha: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{cur: 1}]),
+			
+			noteOffsetScale: data.noteOffsetScale == null ? 0 : data.noteOffsetScale,
+			noteOffsetRelative: data.noteOffsetRelative == null ? false : data.noteOffsetRelative,
+			noteOffset: {
+				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal"),
+				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal")
+			},
+			
+			targets: new StringMap(),
+			
+			bumpPattern: data.startBumpPattern == null ? null : data.startBumpPattern,
+			bumpPatternStart: 0,
+			bumpPatternLength: 16,
+			bumpPatternRelative: false,
+			
+			exists: true
+		};
+		
+		if (obj.bumpPattern == null) {
+			obj.bumpPattern = new IntMap();
+			obj.bumpPattern.set(0, (Constants.DEFAULT_BOP_INTENSITY - 1.0) * (obj.gameCamera ? 1 : 2));
+		}
+		
+		obj.bump = function(amount:Float, relative:Bool = false):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			obj.zoom.set_cur(relative ? obj.zoom.cur * (1 + amount) : obj.zoom.cur + amount);
+		};
+		
+		obj.setBumpPattern = function(pattern:IntMap<Float>, length:Int = 0, ?start:Int, relative:Bool = false):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			obj.bumpPattern = pattern;
+			
+			var lastStep:Int = length;
+			for (step in pattern.keys()) {
+				lastStep = Math.max(lastStep, step);
+			}
+			
+			obj.bumpPatternLength = lastStep;
+			
+			if (start != null) {
+				obj.bumpPatternStart = start;
+			}
+			
+			obj.bumpPatternRelative = relative;
+		};
+		
+		obj.onNoteHit = function(event:HitNoteScriptEvent):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			if (obj.noteOffsetScale == 0) {
+				obj.onNoteMiss();
+				return;
+			}
+			
+			var x:Float = 0;
+			var y:Float = 0;
+			switch (event.note.direction) {
+				case 0: {x = -obj.noteOffsetScale;}
+				case 1: {y = obj.noteOffsetScale;}
+				case 2: {y = -obj.noteOffsetScale;}
+				case 3: {x = obj.noteOffsetScale;}
+			}
+			
+			obj.noteOffset.x.set_target(x);
+			obj.noteOffset.y.set_target(y);
+		};
+		
+		obj.onNoteMiss = function():Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			obj.noteOffset.x.set_target(0);
+			obj.noteOffset.y.set_target(0);
+		};
+		
+		obj.onStepHit = function(event:SongTimeScriptEvent):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			obj.bump(obj.bumpPattern.get((event.step - obj.bumpPatternStart) % Math.max(1, obj.bumpPatternLength)), obj.bumpPatternRelative);
+		};
+		
+		obj.onSongEvent = function(event:SongEventScriptEvent):Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			var eventData:SongEventDataRaw = event.eventData;
+			switch (eventData.eventKind) {
+				case "FocusCamera": {
+					if (obj.gameCamera) {
+						var x:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "x"]);
+						if (x == null) {
+							x = 0;
+						}
+						
+						x -= 640;
+						
+						var y:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "y"]);
+						if (y == null) {
+							y = 0;
+						}
+						
+						y -= 360;
+						
+						if (PlayState.instance != null) {
+							var stage:Stage = PlayState.instance.currentStage;
+							
+							var charID:Null<Int> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetInt", [eventData, "char"]);
+							switch (charID) {
+								case 0: {
+									if (stage.getBoyfriend() != null) {
+										var point:FlxPoint = stage.getBoyfriend().cameraFocusPoint;
+										x += point.x;
+										y += point.y;
+									}
+								}
+								
+								case 1: {
+									if (stage.getDad() != null) {
+										var point:FlxPoint = stage.getDad().cameraFocusPoint;
+										x += point.x;
+										y += point.y;
+									}
+								}
+								
+								case 2: {
+									if (stage.getGirlfriend() != null) {
+										var point:FlxPoint = stage.getGirlfriend().cameraFocusPoint;
+										x += point.x;
+										y += point.y;
+									}
+								}
+							}
+						}
+						
+						var duration:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "duration"]);
+						if (duration == null) {
+							duration = 0;
+						}
+						
+						if (Conductor.instance != null) {
+							duration = Conductor.instance.stepLengthMs * duration / 1000;
+						}
+						
+						var ease:Null<String> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetString", [eventData, "ease"]);
+						switch (ease) {
+							case "CLASSIC": {
+								obj.position.x.set_target(x);
+								obj.position.y.set_target(y);
+							}
+							
+							case "INSTANT": {
+								obj.position.x.snap(x, false);
+								obj.position.y.snap(y, false);
+							}
+							
+							default: {
+								obj.position.x.tween(null, x, duration, ease);
+								obj.position.y.tween(null, y, duration, ease);
+							}
+						}
+					}
+				}
+				
+				case "SetCameraBop": {
+					if (PlayState.instance != null) {
+						var rate:Null<Int> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetInt", [eventData, "rate"]);
+						if (rate == null) {
+							rate = Constants.DEFAULT_ZOOM_RATE;
+						}
+						
+						var intensity:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "intensity"]);
+						if (intensity == null) {
+							intensity = 1.0;
+						}
+						
+						intensity = (Constants.DEFAULT_BOP_INTENSITY - 1.0) * intensity * (obj.gameCamera ? 1 : 2);
+						
+						var bumpPattern:IntMap<Float> = new IntMap();
+						bumpPattern.set(0, intensity);
+						obj.setBumpPattern(bumpPattern, rate * 4, null, obj.bumpPatternRelative);
+					}
+				}
+				
+				case "ZoomCamera": {
+					if (obj.gameCamera) {
+						if (
+							PlayState.instance != null &&
+							PlayState.instance.currentStage != null &&
+							!PlayState.instance.isMinimalMode
+						) {
+							var zoom:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "zoom"]);
+							if (zoom == null) {
+								zoom = 1;
+							}
+							
+							var duration:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "duration"]);
+							if (duration == null) {
+								duration = 4;
+							}
+							
+							var mode:Null<String> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetString", [eventData, "mode"]);
+							if (mode == null) {
+								mode = "direct";
+							}
+							
+							var ease:Null<String> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetString", [eventData, "ease"]);
+							if (ease == null) {
+								ease = "linear";
+							}
+							
+							var eventZoom:Float = zoom * (mode == "direct" ? FlxCamera.defaultZoom : PlayState.instance.stageZoom);
+							switch (ease) {
+								case "INSTANT": {
+									obj.zoom.tween(null, eventZoom, 0, "linear");
+								}
+								
+								default: {
+									var eventDuration:Float = Conductor.instance.stepLengthMs * duration / 1000;
+									obj.zoom.tween(null, eventZoom, eventDuration, ease);
+								}
+							}
+						}
+					}
+				}
+			}
+		};
+		
+		obj.onUpdate = function():Void {
+			if (!obj.exists || obj.parent == null) {
+				return;
+			}
+			
+			var elapsed:Float = FlxG.elapsed;
+			
+			obj.position.x.update(elapsed);
+			obj.position.y.update(elapsed);
+			obj.positionShake.x.update(elapsed);
+			obj.positionShake.y.update(elapsed);
+			
+			obj.offset.x.update(elapsed);
+			obj.offset.y.update(elapsed);
+			obj.offsetShake.x.update(elapsed);
+			obj.offsetShake.y.update(elapsed);
+			
+			obj.zoom.update(elapsed);
+			obj.zoomShake.update(elapsed);
+			
+			obj.alpha.update(elapsed);
+			
+			obj.noteOffset.x.update(elapsed);
+			obj.noteOffset.y.update(elapsed);
+			
+			if (obj.enabled) {
+				obj.parent.scroll.x = obj.position.x.applied + obj.positionShake.x.applied;
+				obj.parent.scroll.y = obj.position.y.applied + obj.positionShake.y.applied;
+				
+				obj.parent.scroll.x += obj.offset.x.applied + obj.offsetShake.x.applied + obj.noteOffset.x.applied / (obj.noteOffsetRelative ? obj.parent.zoom : 1);
+				obj.parent.scroll.y += obj.offset.y.applied + obj.offsetShake.y.applied + obj.noteOffset.y.applied / (obj.noteOffsetRelative ? obj.parent.zoom : 1);
+				
+				obj.parent.zoom = obj.zoom.applied + obj.zoomShake.applied;
+				
+				obj.parent.alpha = obj.alpha.applied;
+			}
+			
+			if (PlayState.instance != null) {
+				if (obj.enabled) {
+					if (obj.gameCamera) {
+						PlayState.instance.cameraFollowPoint.x = obj.parent.scroll.x;
+						PlayState.instance.cameraFollowPoint.y = obj.parent.scroll.y;
+						PlayState.instance.currentCameraZoom = obj.parent.zoom;
+					}
+					
+					PlayState.instance.cancelAllCameraTweens();
+					
+					FlxTween.globalManager.cancelTweensOf(obj.parent);
+					FlxTween.globalManager.cancelTweensOf(obj.parent.scroll);
+					obj.parent.followLerp = 0;
+					obj.parent.target = null;
+				}
+				
+				var paused:Bool = PlayState.instance.get_isGamePaused() || obj.paused;
+				
+				obj.position.x.paused = paused;
+				obj.position.y.paused = paused;
+				obj.positionShake.x.paused = paused;
+				obj.positionShake.y.paused = paused;
+				
+				obj.offset.x.paused = paused;
+				obj.offset.y.paused = paused;
+				obj.offsetShake.x.paused = paused;
+				obj.offsetShake.y.paused = paused;
+				
+				obj.zoom.paused = paused;
+				obj.zoomShake.paused = paused;
+				
+				obj.alpha.paused = paused;
+				
+				obj.noteOffset.x.paused = paused;
+				obj.noteOffset.y.paused = paused;
+			}
+		};
+		
+		obj.destroy = function():Void {
+			if (!obj.exists) {
+				return;
+			}
+			
+			obj.position.x.destroy();
+			obj.position.y.destroy();
+			obj.positionShake.x.destroy();
+			obj.positionShake.y.destroy();
+			
+			obj.offset.x.destroy();
+			obj.offset.y.destroy();
+			obj.offsetShake.x.destroy();
+			obj.offsetShake.y.destroy();
+			
+			obj.zoom.destroy();
+			obj.zoomShake.destroy();
+			
+			obj.alpha.destroy();
+			
+			obj.noteOffset.x.destroy();
+			obj.noteOffset.y.destroy();
+			
+			FlxG.signals.postUpdate.remove(obj.onUpdate);
+			
+			alive.remove(obj);
+			
+			toDestroy.remove(obj.destroy);
+			
+			exists = false;
+		};
+		
+		if (data.startPosition != null) {
+			obj.position.x.snap(data.startPosition.x, true);
+			obj.position.y.snap(data.startPosition.y, true);
+		} else if (data.parent != null) {
+			obj.position.x.snap(data.parent.scroll.x, true);
+			obj.position.y.snap(data.parent.scroll.y, true);
+		}
+		
+		if (data.startZoom != null) {
+			obj.zoom.snap(data.startZoom, true);
+		} else if (data.parent != null) {
+			obj.zoom.snap(data.parent.zoom, true);
+		}
+		
+		if (!FlxG.signals.postUpdate.has(obj.onUpdate)) {
+			FlxG.signals.postUpdate.add(obj.onUpdate);
+		}
+		
+		alive.push(obj);
+		
+		toDestroy.push(obj.destroy);
+		
+		return obj;
+	}
+	
+	private var alive:Array<NeocamObj> = new Array();
+	private var toDestroy:Array<()->Void> = new Array();
+	
+	override public function onNoteHit(event:HitNoteScriptEvent):Void {
+		for (obj in alive) {
+			obj.onNoteHit(event);
+		}
+	}
+	
+	override public function onNoteMiss(event:NoteScriptEvent):Void {
+		for (obj in alive) {
+			obj.onNoteMiss();
+		}
+	}
+	
+	override public function onNoteGhostMiss(event:GhostMissNoteScriptEvent):Void {
+		for (obj in alive) {
+			obj.onNoteMiss();
+		}
+	}
+	
+	override public function onStepHit(event:SongTimeScriptEvent):Void {
+		for (obj in alive) {
+			obj.onStepHit(event);
+		}
+	}
+	
+	override public function onSongEvent(event:SongEventScriptEvent):Void {
+		for (obj in alive) {
+			obj.onSongEvent(event);
+		}
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		bind();
+	}
+	
+	private function bind():Void {
+		ModuleHandler.getModule("be.reloader.Reloader").scriptGet("reloadPre").set("be.neocam.Neocam", {
+			priority: -2147483648,
+			callback: "onReload",
+			variables: function():StringMap {
+				return [
+					"toDestroy" => toDestroy
+				];
+			}
+		});
+	}
+	
+	public function onReload():Void {
+		while (toDestroy.length > 0) {
+			toDestroy.pop()();
+		}
+		
+		bind();
+	}
+}

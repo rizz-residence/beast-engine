@@ -1,0 +1,356 @@
+package be.save;
+
+import String;
+import StringTools;
+
+import haxe.ds.StringMap;
+
+import flixel.FlxG;
+
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+import funkin.util.FileUtil;
+import funkin.util.FileWriteMode;
+import funkin.util.SerializerUtil;
+import funkin.util.WindowUtil;
+
+/**
+ * Data for registering a save entry.
+ */
+typedef SaveEntryData = {
+	/**
+	 * Identifier string for your mod's save data. Make sure it's unique!
+	 */
+	id:String,
+	
+	/**
+	 * The file path to read and write the data to, relative to "./save". Defaults to `id`.
+	 * This should be a JSON file; the extension will be added if not provided.
+	 */
+	filePath:String,
+	
+	/**
+	 * The default save data structure to use if the file doesn't exist. Defaults to an empty object.
+	 */
+	template:Dynamic,
+	
+	/**
+	 * Whether the save data should be saved to disk when the game reloads. Defaults to `true`.
+	 */
+	saveOnReload:Bool
+}
+
+/**
+ * Internal save entry object.
+ */
+typedef SaveEntry = {
+	/**
+	 * Identifier string for your mod's save data. Make sure it's unique!
+	 */
+	id:String,
+	
+	/**
+	 * The file path to read and write the data to, relative to "./save". Defaults to `id`.
+	 * This should be a JSON file; the extension will be added if not provided.
+	 */
+	filePath:String,
+	
+	/**
+	 * The default save data structure to use if the file doesn't exist. Defaults to an empty object.
+	 */
+	template:Dynamic,
+	
+	/**
+	 * Your mod's save data structure. Defaults to `template`, or the file contents if it exists.
+	 * Returned by `getSaveData`.
+	 */
+	saveData:Dynamic,
+	
+	/**
+	 * Whether the save data should be saved to disk when the game reloads. Defaults to `true`.
+	 */
+	saveOnReload:Bool
+}
+
+/**
+ * A helper module for managing mod save data.
+ * This will create a `save` folder in the game's directory when a mod registers a save entry.
+ * 
+ * Example:
+ * ```haxe
+ * package exampleMod;
+ * 
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.modding.module.ScriptedModule;
+ * 
+ * class SaveExample extends ScriptedModule {
+ *     public function new() {
+ *         super("exampleMod.SaveExample", -2147483646);
+ *     }
+ *     
+ *     private var filePath:String = "exampleModSave"; // Will save to "save/exampleModSave.json"
+ *     
+ *     private var template:Dynamic = {
+ *         exampleValue: 0
+ *         exampleArray: new Array(),
+ *         exampleObject: {
+ *             exampleKey: "exampleValue"
+ *         }
+ *     };
+ *     
+ *     override public function onCreate(event:ScriptEvent):Void {
+ *         // Dynamically modify the template before registering if needed.
+ *         for (i in 0...10) {
+ *             template.exampleArray.push(i);
+ *         }
+ *         
+ *         ModuleHandler.getModule("be.save.Save").scriptCall("register", [{
+ *             id: "exampleMod",
+ *             filePath: filePath,
+ *             template: template
+ *         }]);
+ *     }
+ *     
+ *     public function increment():Void {
+ *         var saveData:Dynamic = ModuleHandler.getModule("be.save.Save").scriptCall("getSaveData", ["exampleMod"]);
+ *         saveData.exampleValue++;
+ *     }
+ *     
+ *     // You can set up an auto-save system like this:
+ *     public var autoSaveEnabled:Bool = true;
+ *     public var autoSaveInterval:Float = 60;
+ *     private var autoSaveTick:Float = 0;
+ *     override public function onUpdate(event:UpdateScriptEvent):Void {
+ *         if (!autoSaveEnabled) {
+ *             return;
+ *         }
+ *         
+ *         autoSaveTick += event.elapsed;
+ *         if (autoSaveTick >= autoSaveInterval) {
+ *             autoSaveTick %= autoSaveInterval;
+ *             ModuleHandler.getModule("be.save.Save").scriptCall("save", ["exampleMod"]);
+ *         }
+ *     }
+ * }
+ * ```
+ */
+class Save extends ScriptedModule {
+	public function new() {
+		super("be.save.Save", -2147483647);
+	}
+	
+	/**
+	 * Registers a save entry and attempts to load the data.
+	 * If the file doesn't exist, the template is used.
+	 * 
+	 * @param data The save entry data.
+	 * @param cleanSave If `true`, keys in the loaded data that don't exist in the template will be removed.
+	 * @param saveImmediately Optionally write the data to file immediately after registering.
+	 * @return Your mod's save data structure, or `null` if the ID is invalid.
+	 */
+	public function register(data:SaveEntryData, cleanSave:Bool = false, saveImmediately:Bool = false):Dynamic {
+		if (checkID(data) == null) {
+			return;
+		}
+		
+		if (entries.exists(data.id)) {
+			return entries.get(data.id).data;
+		}
+		
+		trace("beast-engine: Registering save entry \"" + data.id + "\"...");
+		
+		checkFilePath(data);
+		
+		checkSaveData(data);
+		
+		if (FileUtil.doesFileExist(data.filePath)) {
+			var saveJSON:Dynamic = FileUtil.readJSONFromPath(data.filePath);
+			if (saveJSON != null) {
+				data.saveData = ModuleHandler.getModule("be.util.GenUtil").scriptCall("objectMerge", [data.saveData, saveJSON, cleanSave]);
+				
+				trace("beast-engine: Save data for entry \"" + data.id + "\" loaded.");
+			} else {
+				trace("beast-engine: Failed to read save data for entry \"" + data.id + "\". Using template.");
+			}
+		} else {
+			trace("beast-engine: No exising save data found for entry \"" + data.id + "\". Initializing with template.");
+		}
+		
+		if (data.saveOnReload == null) {
+			data.saveOnReload = true;
+		}
+		
+		entries.set(data.id, data);
+		
+		if (saveImmediately) {
+			save(data.id, false);
+		}
+		
+		return data.saveData;
+	}
+	
+	/**
+	 * Gets the save data for a registered entry.
+	 */
+	public function getSaveData(id:String):Null<Dynamic> {
+		if (!entries.exists(id)) {
+			return;
+		}
+		
+		return checkSaveData(entries.get(id));
+	}
+	
+	/**
+	 * Attempt to save the data for a registered entry to disk.
+	 * 
+	 * @param id The ID of the save entry.
+	 * @param pretty If `true`, the JSON will be pretty-printed, and minified otherwise.
+	 * @return Whether the save was successful.
+	 */
+	public function save(id:String, pretty:Bool = true):Bool {
+		if (!entries.exists(id)) {
+			return false;
+		}
+		
+		var entry:SaveEntry = entries.get(id);
+		if (checkID(entry) == null) {
+			entry.id = id;
+		}
+		
+		FileUtil.writeStringToPath(checkFilePath(entry), SerializerUtil.toJSON(checkSaveData(entry), null, pretty), FileWriteMode.Force);
+		
+		return true;
+	}
+	
+	/**
+	 * Attempts to save all registered entries to disk.
+	 * 
+	 * @param pretty If `true`, the JSONs will be pretty-printed, and minified otherwise.
+	 * @return Whether all saves were successful.
+	 */
+	public function saveAll(pretty:Bool = true):Bool {
+		var success:Bool = true;
+		for (entry in entries.keys()) {
+			success = success && save(entry, pretty);
+		}
+		
+		return success;
+	}
+	
+	/**
+	 * Internal variable to store save entries.
+	 * Don't touch this please...
+	 */
+	private var entries:StringMap<SaveEntry> = new StringMap();
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		hook();
+		
+		WindowUtil.windowExit.add(exit);
+	}
+	
+	private function hook():Void {
+		ModuleHandler.getModule("be.reloader.Reloader").scriptGet("reloadPre").set("be.save.Save", {
+			priority: -2147483648,
+			callback: "onReload",
+			variables: function():StringMap<Dynamic> {
+				return [
+					"entries" => entries
+				];
+			}
+		});
+	}
+	
+	public function onReload():Void {
+		hook();
+		
+		WindowUtil.windowExit.add(exit);
+	}
+	
+	public var exit:(Null<Dynamic>)->Void = function(?_):Void {
+		trace("beast-engine: Game closing! Attempting to write all save data...");
+		
+		saveAll();
+		
+		if (WindowUtil.windowExit.has(exit)) {
+			WindowUtil.windowExit.remove(exit);
+		}
+	};
+	
+	private var pressedReload:Bool = false;
+	override public function onUpdate(event:UpdateScriptEvent):Void {
+		pressedReload = FlxG.keys.justPressed.F5;
+	}
+	
+	override public function onDestroy(event:ScriptEvent):Void {
+		if (
+			(PlayState.instance != null && PlayState.instance.criticalFailure) ||
+			(!FlxG.keys.justPressed.F5 && !pressedReload)
+		) {
+			return;
+		}
+		
+		for (entry in entries.keys()) {
+			if (entries.get(entry).saveOnReload == true) {
+				save(entry);
+			}
+		}
+		
+		if (WindowUtil.windowExit.has(exit)) {
+			WindowUtil.windowExit.remove(exit);
+		}
+	}
+	
+	private function checkID(entry:Dynamic):Null<String> {
+		if (entry == null || entry.id == null || !Std.isOfType(entry.id, String)) {
+			return;
+		}
+		
+		entry.id = StringTools.trim(entry.id);
+		if (entry.id == "") {
+			return;
+		}
+		
+		return entry.id;
+	}
+	
+	private function checkFilePath(entry:Dynamic):Null<String> {
+		if (checkID(entry) == null) {
+			return;
+		}
+		
+		if (entry.filePath == null || !Std.isOfType(entry.filePath, String)) {
+			entry.filePath = entry.id;
+		}
+		
+		entry.filePath = StringTools.trim(entry.filePath);
+		if (entry.filePath == "") {
+			entry.filePath = entry.id;
+		}
+		
+		entry.filePath = ModuleHandler.getModule("be.util.GenUtil").scriptCall("sanitizePath", [entry.filePath]);
+		
+		if (!StringTools.startsWith(entry.filePath, "save/")) {
+			entry.filePath = "save/" + entry.filePath;
+		}
+		
+		if (!StringTools.endsWith(entry.filePath, ".json")) {
+			entry.filePath += ".json";
+		}
+		
+		return entry.filePath;
+	}
+	
+	private function checkSaveData(entry:Dynamic):Dynamic {
+		if (entry.template == null) {
+			entry.template = {};
+		}
+		
+		if (entry.saveData == null) {
+			entry.saveData = entry.template;
+		}
+		
+		return entry.saveData;
+	}
+}

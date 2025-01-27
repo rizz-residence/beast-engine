@@ -1,0 +1,22 @@
+package be.song.notekinds;
+
+import funkin.modding.module.ModuleHandler;
+import funkin.play.character.BaseCharacter;
+import funkin.play.notes.notekind.ScriptedNoteKind;
+
+/**
+ * A note kind that skips the singing animation for the note.
+ */
+class NoAnimationNote extends ScriptedNoteKind {
+	public function new() {
+		super("be.song.notekinds.NoAnimationNote", "No Animation");
+	}
+	
+	override public function onNoteHit(event:HitNoteScriptEvent):Void {
+		ModuleHandler.getModule("be.song.NoteAnimOverride").scriptCall("overrideHit", [
+			event,
+			"be.song.notekinds.NoAnimationNote",
+			function(targetCharacter:BaseCharacter):Void {}
+		]);
+	}
+}
