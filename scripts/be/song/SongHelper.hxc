@@ -220,7 +220,7 @@ typedef SongCallbacks = {
  *     }
  * }
  * 
- * // Example module script that does some song-related logic like using `be.song.SingleVocalsFix`.
+ * // Example module script that does some song-related logic like using `be.song.Fixes.SingleVocalsFix`.
  * package exampleMod.song;
  * 
  * import funkin.modding.module.ModuleHandler;
@@ -267,7 +267,7 @@ typedef SongCallbacks = {
  *                 inExampleModStage = stageIDs.contains(vars.stage.id);
  *                 
  *                 if (inExampleModSong) {
- *                     ModuleHandler.activateModule("be.song.SingleVocalsFix");
+ *                     ModuleHandler.activateModule("be.song.Fixes.SingleVocalsFix");
  *                 }
  *             }
  *         });
@@ -276,7 +276,7 @@ typedef SongCallbacks = {
  *             priority: 1, // Runs after `exampleMod.song.ExampleHUD` `closePersist` callback so it can use `inExampleModStage` before it's reset.
  *             callback: function(vars:Dynamic):Void {
  *                 if (inExampleModSong) {
- *                     ModuleHandler.deactivateModule("be.song.SingleVocalsFix");
+ *                     ModuleHandler.deactivateModule("be.song.Fixes.SingleVocalsFix");
  *                 }
  *                 
  *                 inExampleModSong = false;

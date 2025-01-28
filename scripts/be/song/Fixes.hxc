@@ -12,7 +12,7 @@ import funkin.play.PlayState;
  */
 class SingleVocalsFix extends ScriptedModule {
 	public function new() {
-		super("be.song.SingleVocalsFix", -2147483647);
+		super("be.song.Fixes.SingleVocalsFix", -2147483647);
 	}
 	
 	/**

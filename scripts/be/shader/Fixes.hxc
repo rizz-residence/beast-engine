@@ -11,7 +11,7 @@ import funkin.modding.module.ScriptedModule;
  */
 class ShaderCoordFix extends ScriptedModule {
 	public function new() {
-		super("be.shader.ShaderCoordFix", -2147483648);
+		super("be.shader.Fixes.ShaderCoordFix", -2147483648);
 	}
 	
 	override public function onCreate(event:ScriptEvent):Void {
