@@ -1,5 +1,7 @@
 package be.sequence;
 
+import haxe.ds.ArraySort;
+
 import funkin.Conductor;
 import funkin.modding.module.ScriptedModule;
 
@@ -21,7 +23,7 @@ typedef SequenceEvent = {
 /**
  * An object representing a timed sequence of events based on `Conductor` time.
  */
-typedef SongSequence = {
+typedef SongSequenceObj = {
 	/**
 	 * Internal array of timed events for the sequence.
 	 */
@@ -72,7 +74,7 @@ typedef SongSequence = {
 }
 
 /**
- * Module for creating `SongSequence` objects based on `Conductor` time.
+ * Module for creating `SongSequenceObj` objects based on `Conductor` time.
  * 
  * Example: (see usage in `SongHelper` example)
  */
@@ -82,13 +84,13 @@ class SongSequence extends ScriptedModule {
 	}
 	
 	/**
-	 * Creates a new `SongSequence` object.
+	 * Creates a new `SongSequenceObj` object.
 	 * 
 	 * @param events The events to occur in the sequence.
 	 * @param mult The multiplier for the time of each event.
 	 * @param start Whether the sequence should start running immediately.
 	 */
-	public function new_SongSequence(events:Array<SequenceEvent>, mult:Float = 1, start:Bool = true):SongSequence {
+	public function new_SongSequence(events:Array<SequenceEvent>, mult:Float = 1, start:Bool = true):SongSequenceObj {
 		var obj:Dynamic = {
 			events: new Array(),
 			
@@ -162,8 +164,16 @@ class SongSequence extends ScriptedModule {
 			obj.events.push(event);
 		}
 		
-		obj.events.sort(function(a:SequenceEvent, b:SequenceEvent):Int {
-			return a.time - b.time;
+		ArraySort.sort(obj.events, function(a:SequenceEvent, b:SequenceEvent):Int {
+			if (a.time < b.time) {
+				return -1;
+			}
+			
+			if (a.time > b.time) {
+				return 1;
+			}
+			
+			return 0;
 		});
 		
 		obj.exists = true;

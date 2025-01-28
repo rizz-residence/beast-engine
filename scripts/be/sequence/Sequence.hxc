@@ -1,5 +1,7 @@
 package be.sequence;
 
+import haxe.ds.ArraySort;
+
 import funkin.modding.module.ScriptedModule;
 
 /**
@@ -20,7 +22,7 @@ typedef SequenceEvent = {
 /**
  * An object representing a timed sequence of events.
  */
-typedef Sequence = {
+typedef SequenceObj = {
 	/**
 	 * Internal array of timed events for the sequence.
 	 */
@@ -73,7 +75,9 @@ typedef Sequence = {
 }
 
 /**
- * Module for creating `Sequence` objects.
+ * Module for creating `SequenceObj` objects.
+ * 
+ * Example: (see usage in `SongHelper` example)
  */
 class Sequence extends ScriptedModule {
 	public function new() {
@@ -81,13 +85,13 @@ class Sequence extends ScriptedModule {
 	}
 	
 	/**
-	 * Creates a new `Sequence` object.
+	 * Creates a new `SequenceObj` object.
 	 * 
 	 * @param events The events to occur in the sequence.
 	 * @param mult The multiplier for the time of each event.
 	 * @param start Whether the sequence should start running immediately.
 	 */
-	public function new_Sequence(events:Array<SequenceEvent>, mult:Float = 1, start:Bool = true):Sequence {
+	public function new_Sequence(events:Array<SequenceEvent>, mult:Float = 1, start:Bool = true):SequenceObj {
 		var obj:Dynamic = {
 			events: new Array(),
 			
@@ -130,7 +134,6 @@ class Sequence extends ScriptedModule {
 			}
 			
 			obj.curTime += elapsed;
-			
 			while (obj.events.length > 0 && obj.curTime > obj.events[0].time) {
 				obj.events.shift().callback();
 			}
@@ -159,8 +162,16 @@ class Sequence extends ScriptedModule {
 			obj.events.push(event);
 		}
 		
-		obj.events.sort(function(a:SequenceEvent, b:SequenceEvent):Int {
-			return a.time - b.time;
+		ArraySort.sort(obj.events, function(a:SequenceEvent, b:SequenceEvent):Int {
+			if (a.time < b.time) {
+				return -1;
+			}
+			
+			if (a.time > b.time) {
+				return 1;
+			}
+			
+			return 0;
 		});
 		
 		obj.exists = true;
@@ -171,7 +182,7 @@ class Sequence extends ScriptedModule {
 		return obj;
 	}
 	
-	private var alive:Array<SongSequence> = new Array();
+	private var alive:Array<SequenceObj> = new Array();
 	override public function onUpdate(event:UpdateScriptEvent):Void {
 		for (obj in alive) {
 			obj.update(event.elapsed);
