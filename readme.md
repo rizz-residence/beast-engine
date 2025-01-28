@@ -1,6 +1,6 @@
 # beast-engine
 
-library for fnf modding
+funkin modding library
 
 ## Overview
 
