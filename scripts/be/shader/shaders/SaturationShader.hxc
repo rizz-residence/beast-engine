@@ -18,7 +18,7 @@ class SaturationShader extends ScriptedFlxRuntimeShader {
 	 * The saturation of the texture.
 	 * -1 is inverted, 0 is grayscale, 1 is normal, 2 is double saturation, etc.
 	 * 
-	 * Defaults to `1`.
+	 * Defaults to `1` (disabled).
 	 */
 	public var saturation:Float = 1;
 	public function set_saturation(v:Float):Float {

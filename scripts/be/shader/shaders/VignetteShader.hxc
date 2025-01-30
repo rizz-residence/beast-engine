@@ -84,7 +84,7 @@ class VignetteShader extends ScriptedFlxRuntimeShader {
 	 * Strength of the vignette effect.
 	 * Can be negative for a white vignette.
 	 * 
-	 * Defaults to `0`.
+	 * Defaults to `0` (disabled).
 	 */
 	public var mix:Float = 0;
 	public function set_mix(v:Float):Float {
