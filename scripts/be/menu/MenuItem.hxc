@@ -30,12 +30,9 @@ typedef MenuItemObj = {
 	hitbox:Null<FlxBasic>,
 	
 	/**
-	 * Whether the item should automatically navigate to other items in the menu.
-	 */
-	autoNavigate:Bool,
-	
-	/**
 	 * Whether the item can be interacted with.
+	 * 
+	 * Defaults to `true`.
 	 */
 	enabled:Bool,
 	
@@ -43,6 +40,41 @@ typedef MenuItemObj = {
 	 * Whether the item is focused (menu selection matches this item's index).
 	 */
 	focused:Bool,
+	
+	/**
+	 * Whether the item should automatically navigate to other items in the menu.
+	 * 
+	 * Defaults to `true`.
+	 */
+	autoNavigate:Bool,
+	
+	/**
+	 * Internal counter for the item `onHold` callback.
+	 */
+	pressHoldTick:Float,
+	
+	/**
+	 * Whether to repeat the item `onHold` callback when the item is held down after the initial press.
+	 * 
+	 * Defaults to `false`.
+	 */
+	pressHold:Null<Bool>,
+	
+	/**
+	 * The time in seconds before the item `onHold` callback is repeated.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.5`.
+	 */
+	pressHoldStart:Null<Float>,
+	
+	/**
+	 * The time in seconds for each repeated input when the item is held down.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.1`.
+	 */
+	pressHoldInterval:Null<Float>,
 	
 	/**
 	 * Called when the item is focused.
@@ -59,11 +91,18 @@ typedef MenuItemObj = {
 	onUnfocus:Null<(Dynamic)->Void>,
 	
 	/**
-	 * Called when a direction is pressed. Only used for keyboard-based items.
+	 * Called when directional input is pressed. Only used for keyboard-based items.
 	 * 
-	 * @param directions A list of directional inputs, in order of left/down/up/right.
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
 	 */
-	onDirection:Null<(Array<Bool>)->Void>,
+	onDirectionPress:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when directional input is released. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionRelease:Null<(Array<Bool>)->Void>,
 	
 	/**
 	 * Called when the item is pressed.
@@ -109,9 +148,42 @@ typedef MenuItemData = {
 	hitbox:Null<FlxBasic>,
 	
 	/**
-	 * Whether the item should automatically navigate to other items in the menu.
+	 * Whether the item can be interacted with.
+	 * 
+	 * Defaults to `true`.
+	 */
+	enabled:Null<Bool>,
+	
+	/**
+	 * Whether the item should automatically navigate to other items in the menu for all directions.
+	 * If `false`, you must handle navigation manually with `onDirectionPress` and `onDirectionHold`.
+	 * 
+	 * Defaults to `true`.
 	 */
 	autoNavigate:Null<Bool>,
+	
+	/**
+	 * Whether to repeat the item `onHold` callback when the item is held down after the initial press.
+	 * 
+	 * Defaults to `false`.
+	 */
+	pressHold:Null<Bool>,
+	
+	/**
+	 * The time in seconds before the item `onHold` callback is repeated.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.5`, minimum `0`.
+	 */
+	pressHoldStart:Null<Float>,
+	
+	/**
+	 * The time in seconds for each repeated input when the item is held down.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.1`, minimum `0.01`.
+	 */
+	pressHoldInterval:Null<Float>,
 	
 	/**
 	 * Called when the item is focused.
@@ -128,16 +200,35 @@ typedef MenuItemData = {
 	onUnfocus:Null<(Dynamic)->Void>,
 	
 	/**
-	 * Called when input is detected.
+	 * Called when directional input is pressed. Only used for keyboard-based items.
 	 * 
-	 * @param directions A list of directional inputs, in order of left/down/up/right.
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
 	 */
-	onDirection:Null<(Array<Bool>)->Void>,
+	onDirectionPress:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when directional input is pressed from hold navigation. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionHold:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when directional input is released. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionRelease:Null<(Array<Bool>)->Void>,
 	
 	/**
 	 * Called when the item is pressed.
 	 */
 	onPress:Null<()->Void>,
+	
+	/**
+	 * Called when the item is held down.
+	 */
+	onHold:Null<()->Void>,
 	
 	/**
 	 * Called when input is released after pressing the item.
@@ -184,16 +275,25 @@ class MenuItem extends ScriptedModule {
 			container: data.container,
 			hitbox: data.hitbox,
 			
+			enabled: true,
+			focused: false,
+			
 			autoNavigate: data.autoNavigate == null ? true : data.autoNavigate,
 			
-			enabled: false,
-			focused: false,
+			pressHoldTick: -1,
+			pressHold: data.pressHold == null ? false : data.pressHold,
+			pressHoldStart: data.pressHoldStart == null ? 0.5 : Math.max(data.pressHoldStart, 0),
+			pressHoldInterval: data.pressHoldInterval == null ? 0.1 : Math.max(data.pressHoldInterval, 0.01),
 			
 			onFocus: data.onFocus == null ? function(prev:Null<Dynamic>):Void {} : data.onFocus,
 			onUnfocus: data.onUnfocus == null ? function(next:Dynamic):Void {} : data.onUnfocus,
-			onDirection: data.onDirection == null ? function(directions:Array<Bool>):Void {} : data.onDirection,
+			
+			onDirectionPress: data.onDirectionPress == null ? function(directions:Array<Bool>):Void {} : data.onDirectionPress,
+			onDirectionHold: data.onDirectionHold == null ? function(directions:Array<Bool>):Void {} : data.onDirectionHold,
+			onDirectionRelease: data.onDirectionRelease == null ? function(directions:Array<Bool>):Void {} : data.onDirectionRelease,
 				
 			onPress: data.onPress == null ? function():Void {} : data.onPress,
+			onHold: data.onHold == null ? function():Void {} : data.onHold,
 			onRelease: data.onRelease == null ? function():Void {} : data.onRelease,
 				
 			onUpdate: data.onUpdate == null ? function(elapsed:Float):Void {} : data.onUpdate

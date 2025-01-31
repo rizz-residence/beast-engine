@@ -66,32 +66,12 @@ typedef MenuObj = {
 	items:Array<Dynamic>,
 	
 	/**
-	 * The number of columns for keyboard-based `MenuItem`s.
-	 */
-	sizeX:Int,
-	
-	/**
-	 * The number of rows for keyboard-based `MenuItem`s.
-	 */
-	sizeY:Int,
-	
-	/**
-	 * Whether the menu should wrap around the X axis for keyboard-based `MenuItem`s.
-	 */
-	wrapX:Bool,
-	
-	/**
-	 * Whether the menu should wrap around the Y axis for keyboard-based `MenuItem`s.
-	 */
-	wrapY:Bool,
-	
-	/**
 	 * Push existing `MenuItem`s to the menu as keyboard-based items.
 	 * 
 	 * @param items The items to add in order.
-	 * @param autoEnable Whether to automatically enable the items as they're added.
+	 * @param overrideEnable Optionally override all items `enabled` state.
 	 */
-	pushItems:(Array<Dynamic>, Bool)->Void,
+	pushItems:(Array<Dynamic>, Null<Bool>)->Void,
 	
 	/**
 	 * Internal index for the current mouse-based `MenuItem` selection.
@@ -121,9 +101,60 @@ typedef MenuObj = {
 	 * Push existing `MenuItem`s to the menu as mouse-based items.
 	 * 
 	 * @param items The items to add in order.
-	 * @param autoEnable Whether to automatically enable the items as they're added.
+	 * @param overrideEnable Optionally override all items `enabled` state.
 	 */
-	pushMouseItems:(Array<Dynamic>, Bool)->Void,
+	pushMouseItems:(Array<Dynamic>, Null<Bool>)->Void,
+	
+	/**
+	 * The number of columns for keyboard-based `MenuItem`s.
+	 */
+	sizeX:Int,
+	
+	/**
+	 * The number of rows for keyboard-based `MenuItem`s.
+	 */
+	sizeY:Int,
+	
+	/**
+	 * Whether the menu should wrap around the X axis for keyboard-based `MenuItem`s.
+	 */
+	wrapX:Bool,
+	
+	/**
+	 * Whether the menu should wrap around the Y axis for keyboard-based `MenuItem`s.
+	 */
+	wrapY:Bool,
+	
+	/**
+	 * Internal counter for the menu `onDirectionPress` callback.
+	 */
+	navigationHoldTick:Array<Float>,
+	
+	/**
+	 * Whether to repeatedly navigate to other items when the direction is held.
+	 * 
+	 * Note: the navigation will stop if it reaches an item with `autoNavigate` set to `false`,
+	 * but it will invoke `onDirectionPress` for that item.
+	 * 
+	 * Defaults to `false`.
+	 */
+	navigationHold:Null<Bool>,
+	
+	/**
+	 * The time in seconds before the menu starts navigating repeatedly when a direction is held.
+	 * Only used if `navigationHold` is `true`.
+	 * 
+	 * Defaults to `0.5`, minimum `0`.
+	 */
+	navigationHoldStart:Null<Float>,
+	
+	/**
+	 * The time in seconds for each repeated input when a direction is held.
+	 * Only used if `navigationHold` is `true`.
+	 * 
+	 * Defaults to `0.1`, minimum `0.01`.
+	 */
+	navigationHoldInterval:Null<Float>,
 	
 	/**
 	 * Arbitrary callback meant to be called when the menu is entered.
@@ -207,29 +238,63 @@ typedef MenuData = {
 	mouseItems:Null<Array>,
 	
 	/**
-	 * Whether to automatically enable the items when the menu is created.
+	 * Optionally override all menu items `enabled` state on menu creation.
 	 */
-	autoEnable:Null<Bool>,
+	overrideEnable:Null<Bool>,
 	
 	/**
 	 * The number of columns in the menu.
+	 * 
+	 * Defaults to `1`.
 	 */
 	sizeX:Null<Int>,
 	
 	/**
 	 * The number of rows in the menu.
+	 * 
+	 * Defaults to the number of items if `sizeX` is `1`, or the safest number of rows that can fit.
 	 */
 	sizeY:Null<Int>,
 	
 	/**
 	 * Whether the menu should wrap around the X axis.
+	 * 
+	 * Defaults to `true`.
 	 */
 	wrapX:Null<Bool>,
 	
 	/**
 	 * Whether the menu should wrap around the Y axis.
+	 * 
+	 * Defaults to `true`.
 	 */
 	wrapY:Null<Bool>,
+	
+	/**
+	 * Whether to repeatedly navigate to other items when the direction is held.
+	 * 
+	 * Note: the navigation will stop if it reaches an item with `autoNavigate` set to `false`,
+	 * but it will invoke `onDirectionPress` for that item.
+	 * 
+	 * Defaults to `false`.
+	 */
+	navigationHold:Null<Bool>,
+	
+	/**
+	 * The time in seconds before the menu starts navigating repeatedly when a direction is held.
+	 * Only used if `navigationHold` is `true`.
+	 * 
+	 * Defaults to `0.5`.
+	 */
+	navigationHoldStart:Null<Float>,
+	
+	/**
+	 * The time in seconds for each repeated input when a direction is held.
+	 * Only used if `navigationHold` is `true`.
+	 * 
+	 * Defaults to `0.1`.
+	 */
+	navigationHoldInterval:Null<Float>,
 	
 	/**
 	 * Arbitrary callback meant to be called when the menu is entered.
@@ -301,6 +366,11 @@ class Menu extends ScriptedModule {
 			wrapX: data.wrapX == null ? true : data.wrapX,
 			wrapY: data.wrapY == null ? true : data.wrapY,
 			
+			navigationHoldTick: [-1, -1, -1, -1],
+			navigationHold: data.navigationHold == null ? false : data.navigationHold,
+			navigationHoldStart: data.navigationHoldStart == null ? 0.5 : Math.max(data.navigationHoldStart, 0),
+			navigationHoldInterval: data.navigationHoldInterval == null ? 0.1 : Math.max(data.navigationHoldInterval, 0.01),
+			
 			onEnter: data.onEnter == null ? function():Void {} : data.onEnter,
 			onExit: data.onExit == null ? function():Void {} : data.onExit,
 			onBack: data.onBack == null ? function():Void {} : data.onBack,
@@ -309,10 +379,6 @@ class Menu extends ScriptedModule {
 			
 			exists: true
 		};
-		
-		if (data.autoEnable == null) {
-			data.autoEnable = true;
-		}
 		
 		obj.setSelection = function(selection:Int):Void {
 			if (selection < 0 || selection >= obj.items.length) {
@@ -335,8 +401,8 @@ class Menu extends ScriptedModule {
 			var item:Dynamic = obj.items[i];
 			
 			item.menu = obj;
-			if (data.autoEnable) {
-				item.enabled = true;
+			if (data.overrideEnable != null) {
+				item.enabled = data.overrideEnable;
 			}
 			
 			if (i == 0) {
@@ -349,7 +415,7 @@ class Menu extends ScriptedModule {
 		var maxRows:Int = Std.int(Math.floor(obj.items.length / obj.sizeX));
 		obj.sizeY = Std.int(Math.max(1, data.sizeY == null ? maxRows : Math.min(maxRows, data.sizeY)));
 		
-		obj.pushItems = function(items:Array<Dynamic>, autoEnable:Bool = true):Void {
+		obj.pushItems = function(items:Array<Dynamic>, ?overrideEnable:Null<Bool>):Void {
 			if (!obj.exists) {
 				return;
 			}
@@ -364,8 +430,8 @@ class Menu extends ScriptedModule {
 				obj.items.push(item);
 				
 				item.menu = obj;
-				if (autoEnable) {
-					item.enabled = true;
+				if (overrideEnable != null) {
+					item.enabled = overrideEnable;
 				}
 				
 				if (obj.items.length == 1) {
@@ -378,12 +444,12 @@ class Menu extends ScriptedModule {
 			var item:Dynamic = obj.mouseItems[i];
 			
 			item.menu = obj;
-			if (data.autoEnable) {
-				item.enabled = true;
+			if (data.overrideEnable != null) {
+				item.enabled = data.overrideEnable;
 			}
 		}
 		
-		obj.pushMouseItems = function(items:Array<Dynamic>, autoEnable:Bool = true):Void {
+		obj.pushMouseItems = function(items:Array<Dynamic>, ?overrideEnable:Null<Bool>):Void {
 			if (!obj.exists) {
 				return;
 			}
@@ -394,8 +460,8 @@ class Menu extends ScriptedModule {
 				obj.mouseItems.push(item);
 				
 				item.menu = obj;
-				if (autoEnable) {
-					item.enabled = true;
+				if (overrideEnable != null) {
+					item.enabled = overrideEnable;
 				}
 			}
 		};
@@ -435,28 +501,96 @@ class Menu extends ScriptedModule {
 						var curItem:Dynamic = obj.items[obj.selection];
 						if (controls.check("accept", 2) && curItem.enabled) { // JUST_PRESSED
 							curItem.onPress();
+							
+							if (curItem.pressHold) {
+								curItem.pressHoldTick = 0;
+							}
 						} else if (controls.check("accept", -1) && curItem.enabled) { // JUST_RELEASED
 							curItem.onRelease();
+							
+							if (curItem.pressHold) {
+								curItem.pressHoldTick = -1;
+							}
+						} else if (controls.check("accept", 1) && curItem.enabled) { // PRESSED
+							if (curItem.pressHold && curItem.pressHoldTick >= 0) {
+								curItem.pressHoldTick += elapsed;
+								if (curItem.pressHoldTick >= curItem.pressHoldStart + curItem.pressHoldInterval) {
+									curItem.onHold();
+									
+									curItem.pressHoldTick = curItem.pressHoldStart + (curItem.pressHoldTick - curItem.pressHoldStart) % curItem.pressHoldInterval;
+								}
+							}
 						} else {
 							obj.prevSelection = obj.selection;
 							var prevItem:Dynamic = obj.items[obj.prevSelection];
 							
-							var directions:Array<Bool> = [
-								controls.UI_LEFT_P,
-								controls.UI_DOWN_P,
-								controls.UI_UP_P,
-								controls.UI_RIGHT_P
+							var directionPressTrigger:Bool = false;
+							var directionPress:Array<Bool> = [
+								controls.check("ui_left", 2), // JUST_PRESSED
+								controls.check("ui_down", 2), // JUST_PRESSED
+								controls.check("ui_up", 2),   // JUST_PRESSED
+								controls.check("ui_right", 2) // JUST_PRESSED
 							];
 							
+							for (i in 0...directionPress.length) {
+								if (directionPress[i]) {
+									directionPressTrigger = true;
+									
+									if (obj.navigationHold) {
+										if (obj.navigationHoldTick[i] == -1) {
+											obj.navigationHoldTick[i] = 0;
+										}
+									}
+								}
+							}
+							
+							if (directionPressTrigger) {
+								prevItem.onDirectionPress(directionPress);
+							}
+							
+							var directionHold:Array<Bool> = [false, false, false, false];
+							if (obj.navigationHold) {
+								var directionHoldTrigger:Bool = false;
+								var directionPressed:Array<Bool> = [
+									controls.check("ui_left", 1), // PRESSED
+									controls.check("ui_down", 1), // PRESSED
+									controls.check("ui_up", 1),   // PRESSED
+									controls.check("ui_right", 1) // PRESSED
+								];
+									
+								for (i in 0...directionPressed.length) {
+									if (directionPressed[i] && obj.navigationHoldTick[i] >= 0) {
+										obj.navigationHoldTick[i] += elapsed;
+										if (obj.navigationHoldTick[i] >= obj.navigationHoldStart + obj.navigationHoldInterval) {
+											directionHold[i] = true;
+											directionHoldTrigger = true;
+											
+											obj.navigationHoldTick[i] = obj.navigationHoldStart + (obj.navigationHoldTick[i] - obj.navigationHoldStart) % obj.navigationHoldInterval;
+										}
+									}
+								}
+								
+								if (directionHoldTrigger) {
+									prevItem.onDirectionHold(directionHold);
+								}
+							}
+							
 							if (prevItem.autoNavigate) {
+								var toMove:Array<Bool> = [
+									directionPress[0] || directionHold[0],
+									directionPress[1] || directionHold[1],
+									directionPress[2] || directionHold[2],
+									directionPress[3] || directionHold[3]
+								];
+								
 								if (obj.sizeX > 1) {
 									var curRow:Int = Std.int(Math.floor(obj.selection / obj.sizeX));
 									
-									if (directions[0]) {
+									if (toMove[0]) {
 										obj.selection -= 1;
 									}
 									
-									if (directions[3]) {
+									if (toMove[3]) {
 										obj.selection += 1;
 									}
 									
@@ -470,11 +604,11 @@ class Menu extends ScriptedModule {
 								if (obj.sizeY > 1) {
 									var curColumn:Int = obj.selection % obj.sizeX;
 									
-									if (directions[2]) {
+									if (toMove[2]) {
 										obj.selection -= obj.sizeX;
 									}
 									
-									if (directions[1]) {
+									if (toMove[1]) {
 										obj.selection += obj.sizeX;
 									}
 									
@@ -486,18 +620,6 @@ class Menu extends ScriptedModule {
 								}
 							}
 							
-							var directionTrigger:Bool = false;
-							for (direction in directions) {
-								if (direction) {
-									directionTrigger = true;
-									break;
-								}
-							}
-							
-							if (directionTrigger && prevItem.enabled) {
-								prevItem.onDirection(directions);
-							}
-							
 							if (obj.prevSelection != obj.selection) {
 								curItem = obj.items[obj.selection];
 								
@@ -506,6 +628,28 @@ class Menu extends ScriptedModule {
 								
 								prevItem.onUnfocus(curItem);
 								curItem.onFocus(prevItem);
+							}
+							
+							var directionReleaseTrigger:Bool = false;
+							var directionRelease:Array<Bool> = [
+								controls.check("ui_left", -1), // JUST_RELEASED
+								controls.check("ui_down", -1), // JUST_RELEASED
+								controls.check("ui_up", -1),   // JUST_RELEASED
+								controls.check("ui_right", -1) // JUST_RELEASED
+							];
+							
+							for (i in 0...directionRelease.length) {
+								if (directionRelease[i]) {
+									directionReleaseTrigger = true;
+									
+									if (obj.navigationHold) {
+										obj.navigationHoldTick[i] = -1;
+									}
+								}
+							}
+							
+							if (directionReleaseTrigger && curItem.enabled) {
+								curItem.onDirectionRelease(directionRelease);
 							}
 						}
 					}
