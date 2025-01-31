@@ -77,7 +77,10 @@ typedef SequenceObj = {
 /**
  * Module for creating `SequenceObj` objects.
  * 
- * Example: (see usage in `SongHelper` or `Menu` example)
+ * Example: see usages in examples for
+ * - `be.math.MovingVal`
+ * - `be.menu.Menu`
+ * - `be.song.SongHelper`
  */
 class Sequence extends ScriptedModule {
 	public function new() {

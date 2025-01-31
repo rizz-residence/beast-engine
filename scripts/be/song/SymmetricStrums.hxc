@@ -11,7 +11,8 @@ import funkin.util.Constants;
  * A simple helper class that makes the strumlines symmetric like in other engines.
  * Activate and deactivate this module only as necessary or it might unintentionally affect other mods.
  * 
- * Example: (see usage in `SongHelper` example)
+ * Example: see usages in examples for
+ * - `be.song.SongHelper`
  */
 class SymmetricStrums extends ScriptedModule {
 	public function new() {

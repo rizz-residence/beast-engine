@@ -8,7 +8,8 @@ import funkin.play.PlayState;
  * Fixes muting issues with single-vocal songs.
  * Activate and deactivate this module only as necessary or it might unintentionally affect other mods.
  * 
- * Example: (see usage in `SongHelper` example)
+ * Example: see usages in examples for
+ * - `be.song.SongHelper`
  */
 class SingleVocalsFix extends ScriptedModule {
 	public function new() {

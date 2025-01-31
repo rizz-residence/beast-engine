@@ -76,7 +76,8 @@ typedef SongSequenceObj = {
 /**
  * Module for creating `SongSequenceObj` objects based on `Conductor` time.
  * 
- * Example: (see usage in `SongHelper` example)
+ * Example: see usages in examples for
+ * - `be.song.SongHelper`
  */
 class SongSequence extends ScriptedModule {
 	public function new() {

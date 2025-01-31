@@ -75,7 +75,7 @@ typedef SaveEntry = {
 
 /**
  * A helper module for managing mod save data.
- * This will create a `save` folder in the game's directory when a mod registers a save entry.
+ * This will create a "save" folder in the game's working directory when a mod registers a save entry.
  * 
  * Example:
  * ```haxe
