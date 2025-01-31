@@ -225,6 +225,13 @@ typedef MenuData = {
 	container:Null<FlxBasic>,
 	
 	/**
+	 * Whether the menu input should be enabled initially.
+	 * 
+	 * Defaults to `false`.
+	 */
+	enabled:Null<Bool>,
+	
+	/**
 	 * The keyboard-based `MenuItem`s to add to the menu, in order.
 	 */
 	items:Null<Array>,
@@ -326,7 +333,232 @@ typedef MenuData = {
  * 
  * Example:
  * ```haxe
- * // Work in progress...
+ * package exampleMod.states;
+ * 
+ * import flixel.FlxG;
+ * import flixel.FlxBasic;
+ * import flixel.group.FlxTypedSpriteGroup;
+ * import flixel.tweens.FlxEase;
+ * import flixel.tweens.FlxTween;
+ * 
+ * import funkin.Paths;
+ * import funkin.audio.FunkinSound;
+ * import funkin.graphics.FunkinCamera;
+ * import funkin.modding.base.ScriptedMusicBeatState;
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.modding.module.ScriptedModule;
+ * 
+ * class ExampleMenuState extends ScriptedMusicBeatState {
+ *     public var camMain:FunkinCamera = null;
+ *     
+ *     override public function create():Void {
+ *         super.create();
+ *         
+ *         camMain = new FunkinCamera("exampleMod: camMain (exampleMod.states.ExampleMenuState)", 0, 0, 1280, 720, 1);
+ *         camMain.bgColor = 0xff000000;
+ *         FlxG.cameras.add(camMain, true);
+ *         
+ *         ModuleHandler.getModule("exampleMod.states.ExampleMenuState.ExampleMenu").scriptCall("setup", [FlxG.state, camMain]);
+ *         
+ *         ModuleHandler.getModule("be.sequence.Sequence").scriptCall("new_Sequence", [[
+ *             {time: 0.5, callback: function():Void {
+ *                 ModuleHandler.getModule("exampleMod.states.ExampleMenuState.ExampleMenu").scriptGet("menu").onEnter();
+ *             }},
+ *             
+ *             {time: 1.25, callback: function():Void {
+ *                 ModuleHandler.getModule("exampleMod.states.ExampleMenuState.ExampleMenu").scriptGet("menu").enabled = true;
+ *             }},
+ *         ]]);
+ *     }
+ *     
+ *     override public function destroy():Void {
+ *         super.destroy();
+ *         
+ *         FlxG.cameras.remove(camMain, true);
+ *         camMain = null;
+ *         
+ *         ModuleHandler.getModule("exampleMod.states.ExampleMenuState.ExampleMenu").scriptCall("destroy");
+ *     }
+ * }
+ * 
+ * class ExampleMenu extends ScriptedModule {
+ *     public function new() {
+ *         super("exampleMod.states.ExampleMenuState.ExampleMenu");
+ *     }
+ *     
+ *     private var exists:Bool = false;
+ *     private var parent:ScriptedMusicBeatState = null;
+ *     private var camera:FunkinCamera = null;
+ *     
+ *     private var menu:Dynamic = null;
+ *     private var menuItems:Array<Dynamic> = new Array();
+ *     private var mouseItems:Array<Dynamic> = new Array();
+ *     private var menuItemGroup:FlxTypedSpriteGroup = null;
+ *     
+ *     public function setup(?targetState:ScriptedMusicBeatState, ?targetCamera:FunkinCamera):Void {
+ *         if (exists) {
+ *             return;
+ *         }
+ *         
+ *         parent = targetState == null ? FlxG.state : targetState;
+ *         camera = targetCamera == null ? FlxG.camera : targetCamera;
+ *         
+ *         setupItems();
+ *         menu = ModuleHandler.getModule("be.menu.Menu").scriptCall("new_Menu", [{
+ *             data: {
+ *                 exampleValue: 0
+ *             },
+ *             
+ *             container: menuItemGroup,
+ *             
+ *             items: menuItems,
+ *             mouseItems: mouseItems,
+ *             
+ *             sizeX: menuItems.length,
+ *             sizeY: 1,
+ *             
+ *             wrapY: false,
+ *             
+ *             navigationHold: true,
+ *             
+ *             onEnter: function():Void {
+ *                 for (i in 0...menuItemGroup.members.length) {
+ *                     var container:FunkinSprite = menuItemGroup.members[i];
+ *                     FlxTween.globalManager.cancelTweensOf(container, ["x"]);
+ *                     container.x = -400;
+ *                     FlxTween.tween(container, {x: 200}, 0.5 + 0.1 * i, FlxEase.cubicOut);
+ *                 }
+ *             }
+ *             
+ *             onBack: function():Void {
+ *                 menu.enabled = false;
+ *                 menu.onExit();
+ *             }
+ *         }]);
+ *         
+ *         exists = true;
+ *     }
+ *     
+ *     private function setupItems():Void {
+ *         var item1Sprite:FunkinSprite = new FunkinSprite(-400, 200).loadSparrow("exampleMod/exampleMenu/item1Sprite");
+ *         item1Sprite.animation.addByPrefix("idle", "idle", 24, true);
+ *         item1Sprite.animation.addByPrefix("focus", "focus", 24, true);
+ *         item1Sprite.animation.addByPrefix("select", "select", 24, false);
+ *         
+ *         var item1:Dynamic = ModuleHandler.getModule("be.menu.MenuItem").scriptCall("new_MenuItem", [{
+ *             container: menuItemGroup.add(item1Sprite),
+ *             
+ *             onFocus: function(prev:Null<Dynamic>):Void {
+ *                 item1Sprite.animation.play("focus");
+ *                 
+ *                 FunkinSound.load(Paths.sound("exampleMod/exampleMenu/focusItem"), 0.5, false, true, true, false);
+ *             },
+ *             
+ *             onUnfocus: function(next:Dynamic):Void {
+ *                 item1Sprite.animation.play("idle");
+ *             },
+ *             
+ *             onPress: function():Void {
+ *                 // Do something here idk!
+ *                 
+ *                 FunkinSound.load(Paths.sound("exampleMod/exampleMenu/selectItem"), 0.5, false, true, true, false);
+ *             }
+ *         }]));
+ *         
+ *         menuItems.push(item1);
+ *         
+ *         // Additional items...
+ *         
+ *         var mouseItem1Sprite:FunkinSprite = new FunkinSprite(800, 200).loadSparrow("exampleMod/exampleMenu/exampleMouseItem");
+ *         mouseItem1Sprite.animation.addByPrefix("idle", "idle", 24, true);
+ *         mouseItem1Sprite.animation.addByPrefix("focus", "focus", 24, true);
+ *         mouseItem1Sprite.animation.addByPrefix("hold", "hold", 24, true);
+ *         mouseItem1Sprite.animation.addByPrefix("select", "select", 24, false);
+ *         
+ *         var mouseItem1SpriteHitbox:FlxBasic = new FlxBasic(
+ *             mouseItem1Sprite.x - 50,
+ *             mouseItem1Sprite.y - 50,
+ *             mouseItem1Sprite.width + 100,
+ *             mouseItem1Sprite.height + 100
+ *         );
+ *         
+ *         var mouseItem1:Dynamic = ModuleHandler.getModule("be.menu.MenuItem").scriptCall("new_MenuItem", [{
+ *             data: {
+ *                 holdPercentage: 0
+ *             },
+ *             
+ *             container: mouseItem1Sprite,
+ *             hitbox: mouseItem1SpriteHitbox,
+ *             
+ *             pressHold: true,
+ *             pressHoldStart: 0,
+ *             pressHoldInterval: 0.05,
+ *             
+ *             onFocus: function(prev:Null<Dynamic>):Void {
+ *                 mouseItem1Sprite.animation.play("focus");
+ *                 
+ *                 FunkinSound.load(Paths.sound("exampleMod/exampleMenu/focusItem"), 0.5, false, true, true, false);
+ *             },
+ *             
+ *             onUnfocus: function(next:Null<Dynamic>):Void {
+ *                 mouseItem1Sprite.animation.play("idle");
+ *             },
+ *             
+ *             onPress: function():Void {
+ *                 mouseItem1Sprite.animation.play("hold");
+ *             },
+ *             
+ *             onHold: function():Void {
+ *                 mouseItem1.data.holdPercentage += 0.01;
+ *             },
+ *             
+ *             onRelease: function():Void {
+ *                 if (mouseItem1.data.holdPercentage >= 1) {
+ *                     // Do something here idk!
+ *                     
+ *                     FunkinSound.load(Paths.sound("exampleMod/exampleMenu/selectItem"), 0.5, false, true, true, false);
+ *                 } else {
+ *                     mouseItem1Sprite.animation.play("idle");
+ *                 }
+ *                 
+ *                 mouseItem1.data.holdPercentage = 0;
+ *             }
+ *         }]));
+ *         
+ *         // And so on...
+ *     }
+ *     
+ *     override public function onUpdate(event:UpdateScriptEvent):Void {
+ *         if (!exists) {
+ *             return;
+ *         }
+ *         
+ *         menu.update(event.elapsed);
+ *     }
+ *     
+ *     public function destroy():Void {
+ *         if (!exists) {
+ *             return;
+ *         }
+ *         
+ *         parent = null;
+ *         camera = null;
+ *         
+ *         menu.destroy();
+ *         menu = null;
+ *         
+ *         menuItems.resize(0);
+ *         
+ *         menuItemGroup.destroy();
+ *         menuItemGroup = null;
+ *         
+ *         exists = false;
+ *     }
+ *     
+ *     override public function onDestroy(event:ScriptEvent):Void {
+ *         destroy();
+ *     }
+ * }
  * ```
  */
 class Menu extends ScriptedModule {
@@ -352,7 +584,7 @@ class Menu extends ScriptedModule {
 			
 			container: data.container,
 			
-			enabled: false,
+			enabled: data.enabled == null ? false : data.enabled,
 			frozen: false,
 			
 			selection: 0,

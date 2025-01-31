@@ -77,7 +77,7 @@ typedef SequenceObj = {
 /**
  * Module for creating `SequenceObj` objects.
  * 
- * Example: (see usage in `SongHelper` example)
+ * Example: (see usage in `SongHelper` or `Menu` example)
  */
 class Sequence extends ScriptedModule {
 	public function new() {
