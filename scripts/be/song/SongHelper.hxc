@@ -207,8 +207,24 @@ typedef SongCallbacks = {
  *         });
  *         
  *         ModuleHandler.getModule("be.song.SongHelper").scriptSet("events", [
- *             32 => function(vars:Dynamic):Void { // 2:0:0
- *                 songVars.exampleSprite2.color = 0xffaabbcc;
+ *             30 => function(vars:Dynamic):Void { // 1:2:0
+ *                 ModuleHandler.getModule("be.sequence.SongSequence").scriptCall("new_SongSequence", [[
+ *                     {time: 0, callback: function():Void {
+ *                         songVars.exampleSprite2.color = 0xff0000ff;
+ *                     }},
+ *                     
+ *                     {time: 3, callback: function():Void {
+ *                         songVars.exampleSprite2.color = 0xff00ff00;
+ *                     }},
+ *                     
+ *                     {time: 6, callback: function():Void {
+ *                         songVars.exampleSprite2.color = 0xffff0000;
+ *                     }},
+ *                     
+ *                     {time: 8, callback: function():Void {
+ *                         songVars.camGame.flash(0xffffffff, 1);
+ *                     }}
+ *                 ], Conductor.get_instance().get_stepLengthMs() / 1000]);
  *             }
  *         ]);
  *     }
