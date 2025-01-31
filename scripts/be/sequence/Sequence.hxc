@@ -1,0 +1,194 @@
+package be.sequence;
+
+import haxe.ds.ArraySort;
+
+import funkin.modding.module.ScriptedModule;
+
+/**
+ * An object representing a timed event.
+ */
+typedef SequenceEvent = {
+	/**
+	 * The time in seconds at which the event should occur (not considering `mult`).
+	 */
+	time:Float,
+	
+	/**
+	 * The function to call when the event occurs.
+	 */
+	callback:()->Void
+}
+
+/**
+ * An object representing a timed sequence of events.
+ */
+typedef SequenceObj = {
+	/**
+	 * Internal array of timed events for the sequence.
+	 */
+	events:Array<SequenceEvent>,
+	
+	/**
+	 * Internal time counter for the sequence.
+	 */
+	curTime:Float,
+	
+	/**
+	 * Internal flag for whether the sequence is running.
+	 */
+	running:Bool,
+	
+	/**
+	 * Gets whether the sequence is currently running.
+	 */
+	get_running:()->Bool,
+	
+	/**
+	 * Pauses or resumes the sequence.
+	 * 
+	 * @param v	Whether the sequence should be running.
+	 * @return Whether the sequence is running.
+	 */
+	set_running:(Bool)->Bool,
+	
+	/**
+	 * Gets whether the sequence has completed or been destroyed.
+	 */
+	completed:()->Bool,
+	
+	/**
+	 * Internal update function for the sequence.
+	 * 
+	 * Call this with your own `elapsed` value to "skip" forward or backward in time for this sequence.
+	 */
+	update:(Float)->Void,
+	
+	/**
+	 * Internal flag for whether the sequence object hasn't completed/been destroyed.
+	 */
+	exists:Bool,
+	
+	/**
+	 * Destroys the sequence.
+	 */
+	destroy:()->Void
+}
+
+/**
+ * Module for creating `SequenceObj` objects.
+ * 
+ * Example: see usages in examples for
+ * - `be.math.MovingVal`
+ * - `be.menu.Menu`
+ * - `be.song.SongHelper`
+ */
+class Sequence extends ScriptedModule {
+	public function new() {
+		super("be.sequence.Sequence", -2147483648);
+	}
+	
+	/**
+	 * Creates a new `SequenceObj` object.
+	 * 
+	 * @param events The events to occur in the sequence.
+	 * @param mult The multiplier for the time of each event.
+	 * @param start Whether the sequence should start running immediately.
+	 */
+	public function new_Sequence(events:Array<SequenceEvent>, mult:Float = 1, start:Bool = true):SequenceObj {
+		var obj:Dynamic = {
+			events: new Array(),
+			
+			curTime: 0,
+			
+			running: false,
+			
+			exists: false
+		};
+		
+		obj.get_running = function():Bool {
+			return obj.exists && obj.running && !obj.completed();
+		};
+		
+		obj.set_running = function(v:Bool):Bool {
+			if (!obj.exists) {
+				obj.running = false;
+				return false;
+			}
+			
+			return obj.running = v;
+		};
+		
+		obj.completed = function():Bool {
+			if (!obj.exists) {
+				return true;
+			}
+			
+			var completed:Bool = obj.events.length == 0;
+			if (completed) {
+				obj.running = false;
+			}
+			
+			return completed;
+		};
+		
+		obj.update = function(elapsed:Float):Void {
+			if (!obj.exists || !obj.get_running()) {
+				return;
+			}
+			
+			obj.curTime += elapsed;
+			while (obj.events.length > 0 && obj.curTime > obj.events[0].time) {
+				obj.events.shift().callback();
+			}
+			
+			if (obj.completed()) {
+				obj.destroy();
+			}
+		}
+		
+		obj.destroy = function():Void {
+			obj.events.resize(0);
+			
+			obj.running = false;
+			
+			alive.remove(obj);
+			obj.exists = false;
+		};
+		
+		if (events.length == 0) {
+			obj.destroy();
+			return obj;
+		}
+		
+		for (event in events) {
+			event.time *= mult;
+			obj.events.push(event);
+		}
+		
+		ArraySort.sort(obj.events, function(a:SequenceEvent, b:SequenceEvent):Int {
+			if (a.time < b.time) {
+				return -1;
+			}
+			
+			if (a.time > b.time) {
+				return 1;
+			}
+			
+			return 0;
+		});
+		
+		obj.exists = true;
+		obj.set_running(start);
+		
+		alive.push(obj);
+		
+		return obj;
+	}
+	
+	private var alive:Array<SequenceObj> = new Array();
+	override public function onUpdate(event:UpdateScriptEvent):Void {
+		for (obj in alive) {
+			obj.update(event.elapsed);
+		}
+	}
+}

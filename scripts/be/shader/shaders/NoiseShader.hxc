@@ -1,0 +1,65 @@
+package be.shader.shaders;
+
+import funkin.Assets;
+import funkin.Paths;
+import funkin.modding.base.ScriptedFlxRuntimeShader;
+
+/**
+ * A shader for creating a noise effect.
+ */
+class NoiseShader extends ScriptedFlxRuntimeShader {
+	public function new() {
+		super(Assets.getText(Paths.frag("beast-engine/noise")));
+		
+		set_size(size);
+		
+		set_fps(fps);
+		set_time(time);
+		
+		set_mix(mix);
+	}
+	
+	/**
+	 * The size of the noise in pixels.
+	 * 
+	 * Defaults to `1, 1`.
+	 */
+	public var size:Array<Float> = [1, 1];
+	public function set_size(v:Array<Float>):Array<Float> {
+		setFloatArray("u_size", v);
+		return size = v;
+	}
+	
+	/**
+	 * The frames per second the noise will update at.
+	 * 
+	 * Defaults to `24`.
+	 */
+	public var fps:Float = 24;
+	public function set_fps(v:Float):Float {
+		setFloat("u_fps", v);
+		return fps = v;
+	}
+	
+	/**
+	 * The time counter for this shader.
+	 * 
+	 * Defaults to `0`.
+	 */
+	public var time:Float = 0;
+	public function set_time(v:Float):Float {
+		setFloat("u_time", v);
+		return time = v;
+	}
+	
+	/**
+	 * The opacity of the noise over the base texture.
+	 * 
+	 * Defaults to `0` (disabled).
+	 */
+	public var mix:Float = 0;
+	public function set_mix(v:Float):Float {
+		setFloat("u_mix", v);
+		return mix = v;
+	}
+}

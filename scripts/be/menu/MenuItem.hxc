@@ -1,0 +1,305 @@
+package be.menu;
+
+import flixel.FlxBasic;
+
+import funkin.modding.module.ScriptedModule;
+
+/**
+ * An object representing a menu item.
+ */
+typedef MenuItemObj = {
+	/**
+	 * Arbitrary custom data attached to the menu item.
+	 */
+	data:Null<Dynamic>,
+	
+	/**
+	 * The menu the item belongs to.
+	 */
+	menu:Null<Dynamic>,
+	
+	/**
+	 * Arbitrary related container object.
+	 */
+	container:Null<FlxBasic>,
+	
+	/**
+	 * The hitbox of the item. Only used for mouse-based items.
+	 * Uses `container` if `null`.
+	 */
+	hitbox:Null<FlxBasic>,
+	
+	/**
+	 * Whether the item can be interacted with.
+	 * 
+	 * Defaults to `true`.
+	 */
+	enabled:Bool,
+	
+	/**
+	 * Whether the item is focused (menu selection matches this item's index).
+	 */
+	focused:Bool,
+	
+	/**
+	 * Whether the item should automatically navigate to other items in the menu.
+	 * 
+	 * Defaults to `true`.
+	 */
+	autoNavigate:Bool,
+	
+	/**
+	 * Internal counter for the item `onHold` callback.
+	 */
+	pressHoldTick:Float,
+	
+	/**
+	 * Whether to repeat the item `onHold` callback when the item is held down after the initial press.
+	 * 
+	 * Defaults to `false`.
+	 */
+	pressHold:Null<Bool>,
+	
+	/**
+	 * The time in seconds before the item `onHold` callback is repeated.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.5`.
+	 */
+	pressHoldStart:Null<Float>,
+	
+	/**
+	 * The time in seconds for each repeated input when the item is held down.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.1`.
+	 */
+	pressHoldInterval:Null<Float>,
+	
+	/**
+	 * Called when the item is focused.
+	 * 
+	 * @param prev The previously focused item. May be `null` if this item is a mouse-based item.
+	 */
+	onFocus:Null<(Dynamic)->Void>,
+	
+	/**
+	 * Called when the item is unfocused.
+	 * 
+	 * @param next The now focused item. May be `null` if this item is a mouse-based item.
+	 */
+	onUnfocus:Null<(Dynamic)->Void>,
+	
+	/**
+	 * Called when directional input is pressed. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionPress:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when directional input is released. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionRelease:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when the item is pressed.
+	 */
+	onPress:Null<()->Void>,
+	
+	/**
+	 * Called when input is released after pressing the item.
+	 */
+	onRelease:Null<()->Void>,
+	
+	/**
+	 * Called every frame.
+	 * 
+	 * @param elapsed The time elapsed since the last frame in seconds.
+	 */
+	onUpdate:Null<(Float)->Void>
+}
+
+/**
+ * Data for creating a `MenuItemObj` object.
+ */
+typedef MenuItemData = {
+	/**
+	 * Arbitrary custom data attached to the menu item.
+	 */
+	data:Null<Dynamic>,
+	
+	/**
+	 * The menu the item belongs to.
+	 */
+	menu:Null<Dynamic>,
+	
+	/**
+	 * Arbitrary related container object.
+	 */
+	container:Null<FlxBasic>,
+	
+	/**
+	 * The hitbox of the item. Only used for mouse-based items.
+	 * Uses `container` if `null`.
+	 */
+	hitbox:Null<FlxBasic>,
+	
+	/**
+	 * Whether the item can be interacted with.
+	 * 
+	 * Defaults to `true`.
+	 */
+	enabled:Null<Bool>,
+	
+	/**
+	 * Whether the item should automatically navigate to other items in the menu for all directions.
+	 * If `false`, you must handle navigation manually with `onDirectionPress` and `onDirectionHold`.
+	 * 
+	 * Defaults to `true`.
+	 */
+	autoNavigate:Null<Bool>,
+	
+	/**
+	 * Whether to repeat the item `onHold` callback when the item is held down after the initial press.
+	 * 
+	 * Defaults to `false`.
+	 */
+	pressHold:Null<Bool>,
+	
+	/**
+	 * The time in seconds before the item `onHold` callback is repeated.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.5`, minimum `0`.
+	 */
+	pressHoldStart:Null<Float>,
+	
+	/**
+	 * The time in seconds for each repeated input when the item is held down.
+	 * Only used if `pressHold` is `true`.
+	 * 
+	 * Defaults to `0.1`, minimum `0.01`.
+	 */
+	pressHoldInterval:Null<Float>,
+	
+	/**
+	 * Called when the item is focused.
+	 * 
+	 * @param prev	The previously focused item.
+	 */
+	onFocus:Null<(Dynamic)->Void>,
+	
+	/**
+	 * Called when the item is unfocused.
+	 * 
+	 * @param next	The now focused item.
+	 */
+	onUnfocus:Null<(Dynamic)->Void>,
+	
+	/**
+	 * Called when directional input is pressed. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionPress:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when directional input is pressed from hold navigation. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionHold:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when directional input is released. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 */
+	onDirectionRelease:Null<(Array<Bool>)->Void>,
+	
+	/**
+	 * Called when the item is pressed.
+	 */
+	onPress:Null<()->Void>,
+	
+	/**
+	 * Called when the item is held down.
+	 */
+	onHold:Null<()->Void>,
+	
+	/**
+	 * Called when input is released after pressing the item.
+	 */
+	onRelease:Null<()->Void>,
+	
+	/**
+	 * Called every frame.
+	 * 
+	 * @param elapsed The time elapsed since the last frame in seconds.
+	 */
+	onUpdate:Null<(Float)->Void>
+}
+
+/**
+ * Module for creating `MenuItemObj` objects.
+ * 
+ * Example: see usages in examples for
+ * - `be.menu.Menu`
+ */
+class MenuItem extends ScriptedModule {
+	public function new() {
+		super("be.menu.MenuItem", -2147483648);
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+	}
+	
+	/**
+	 * Creates a new `MenuItemObj` object.
+	 * 
+	 * @param data The data for the menu item.
+	 */
+	public function new_MenuItem(?data:MenuItemData):MenuItemObj {
+		if (data == null) {
+			data = {};
+		}
+		
+		var obj:Dynamic = {
+			data: data.data == null ? {} : data.data,
+			
+			menu: data.menu,
+			
+			container: data.container,
+			hitbox: data.hitbox,
+			
+			enabled: true,
+			focused: false,
+			
+			autoNavigate: data.autoNavigate == null ? true : data.autoNavigate,
+			
+			pressHoldTick: -1,
+			pressHold: data.pressHold == null ? false : data.pressHold,
+			pressHoldStart: data.pressHoldStart == null ? 0.5 : Math.max(data.pressHoldStart, 0),
+			pressHoldInterval: data.pressHoldInterval == null ? 0.1 : Math.max(data.pressHoldInterval, 0.01),
+			
+			onFocus: data.onFocus == null ? function(prev:Null<Dynamic>):Void {} : data.onFocus,
+			onUnfocus: data.onUnfocus == null ? function(next:Dynamic):Void {} : data.onUnfocus,
+			
+			onDirectionPress: data.onDirectionPress == null ? function(directions:Array<Bool>):Void {} : data.onDirectionPress,
+			onDirectionHold: data.onDirectionHold == null ? function(directions:Array<Bool>):Void {} : data.onDirectionHold,
+			onDirectionRelease: data.onDirectionRelease == null ? function(directions:Array<Bool>):Void {} : data.onDirectionRelease,
+				
+			onPress: data.onPress == null ? function():Void {} : data.onPress,
+			onHold: data.onHold == null ? function():Void {} : data.onHold,
+			onRelease: data.onRelease == null ? function():Void {} : data.onRelease,
+				
+			onUpdate: data.onUpdate == null ? function(elapsed:Float):Void {} : data.onUpdate
+		};
+		
+		return obj;
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"title": "beast-engine",
+	"description": "funkin modding library",
+	"homepage": "https://github.com/rizz-residence/beast-engine",
+	
+	"contributors": [
+		{"name": "cyn0x8", "role": "coder", "url": "https://github.com/cyn0x8"},
+		
+		{"name": "Raltyro", "role": "shader coord fix", "url": "https://github.com/Raltyro"}
+	],
+	
+	"license": "MIT",
+	
+	"api_version": "0.5.0",
+	"mod_version": "1.0.0"
+}

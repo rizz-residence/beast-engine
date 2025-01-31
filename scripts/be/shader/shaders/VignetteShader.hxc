@@ -1,0 +1,94 @@
+package be.shader.shaders;
+
+import funkin.Assets;
+import funkin.Paths;
+import funkin.modding.base.ScriptedFlxRuntimeShader;
+
+/**
+ * A shader for creating a vignette effect.
+ */
+class VignetteShader extends ScriptedFlxRuntimeShader {
+	public function new() {
+		super(Assets.getText(Paths.frag("beast-engine/vignette")));
+		
+		set_radiusMin(radiusMin);
+		set_radiusMax(radiusMax);
+		set_curve(curve);
+		
+		set_smooth(smooth);
+		
+		set_mix(mix);
+	}
+	
+	/**
+	 * The "start" radius of the vignette.
+	 * 
+	 * For scale reference, the center of the screen is 0 and the horizontal edge 1.
+	 * 
+	 * Defaults to `0`.
+	 */
+	public var radiusMin:Float = 0;
+	public function set_radiusMin(v:Float):Float {
+		setFloat("u_radiusMin", v);
+		return radiusMin = v;
+	}
+	
+	/**
+	 * The "end" radius of the vignette.
+	 * 
+	 * For scale reference, the center of the screen is 0 and the horizontal edge 1.
+	 * 
+	 * Defaults to `1`.
+	 */
+	public var radiusMax:Float = 1;
+	public function set_radiusMax(v:Float):Float {
+		setFloat("u_radiusMax", v);
+		return radiusMax = v;
+	}
+	
+	/**
+	 * The exponential curve of the vignette from its minimum to maximum radius.
+	 * 1 is linear, 2 is quadratic, etc.
+	 * 
+	 * Defaults to `1`.
+	 */
+	public var curve:Float = 1;
+	public function set_curve(v:Float):Float {
+		setFloat("u_curve", v);
+		return curve = v;
+	}
+	
+	/**
+	 * Whether the vignette should correct for aspect ratio and be circular.
+	 * 
+	 * Defaults to `true`.
+	 */
+	public var circular:Bool = true;
+	public function set_circular(v:Bool):Bool {
+		setBool("u_circular", v);
+		return circular = v;
+	}
+	
+	/**
+	 * Whether the vignette should use smoothstep or linear interpolation.
+	 * 
+	 * Defaults to `true`.
+	 */
+	public var smooth:Bool = true;
+	public function set_smooth(v:Bool):Bool {
+		setBool("u_smooth", v);
+		return smooth = v;
+	}
+	
+	/**
+	 * Strength of the vignette effect.
+	 * Can be negative for a white vignette.
+	 * 
+	 * Defaults to `0` (disabled).
+	 */
+	public var mix:Float = 0;
+	public function set_mix(v:Float):Float {
+		setFloat("u_mix", v);
+		return mix = v;
+	}
+}

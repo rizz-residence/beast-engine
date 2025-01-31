@@ -1,0 +1,194 @@
+package be.sequence;
+
+import haxe.ds.ArraySort;
+
+import funkin.Conductor;
+import funkin.modding.module.ScriptedModule;
+
+/**
+ * An object representing a timed event.
+ */
+typedef SequenceEvent = {
+	/**
+	 * The time in seconds at which the event should occur (not considering `mult`).
+	 */
+	time:Float,
+	
+	/**
+	 * The function to call when the event occurs.
+	 */
+	callback:()->Void
+}
+
+/**
+ * An object representing a timed sequence of events based on `Conductor` time.
+ */
+typedef SongSequenceObj = {
+	/**
+	 * Internal array of timed events for the sequence.
+	 */
+	events:Array<SequenceEvent>,
+	
+	/**
+	 * Internal variable for the relative start time of the sequence.
+	 */
+	startTime:Float,
+	
+	/**
+	 * Internal flag for whether the sequence is running.
+	 */
+	running:Bool,
+	
+	/**
+	 * Gets whether the sequence is currently running.
+	 */
+	get_running:()->Bool,
+	
+	/**
+	 * Pauses or resumes the sequence.
+	 * 
+	 * @param v	Whether the sequence should be running.
+	 * @return Whether the sequence is running.
+	 */
+	set_running:(Bool)->Bool,
+	
+	/**
+	 * Gets whether the sequence has completed or been destroyed.
+	 */
+	completed:()->Bool,
+	
+	/**
+	 * Internal callback for updating the sequence, respecting `Conductor`.
+	 */
+	update:()->Void,
+	
+	/**
+	 * Internal flag for whether the sequence object hasn't completed/been destroyed.
+	 */
+	exists:Bool,
+	
+	/**
+	 * Destroys the sequence.
+	 */
+	destroy:()->Void
+}
+
+/**
+ * Module for creating `SongSequenceObj` objects based on `Conductor` time.
+ * 
+ * Example: see usages in examples for
+ * - `be.song.SongHelper`
+ */
+class SongSequence extends ScriptedModule {
+	public function new() {
+		super("be.sequence.SongSequence", -2147483648);
+	}
+	
+	/**
+	 * Creates a new `SongSequenceObj` object.
+	 * 
+	 * @param events The events to occur in the sequence.
+	 * @param mult The multiplier for the time of each event.
+	 * @param start Whether the sequence should start running immediately.
+	 */
+	public function new_SongSequence(events:Array<SequenceEvent>, mult:Float = 1, start:Bool = true):SongSequenceObj {
+		var obj:Dynamic = {
+			events: new Array(),
+			
+			startTime: 0,
+			
+			running: false,
+			
+			exists: false
+		};
+		
+		obj.get_running = function():Bool {
+			return obj.exists && !obj.completed() && obj.running;
+		};
+		
+		obj.set_running = function(v:Bool):Bool {
+			if (!obj.exists) {
+				obj.running = false;
+				return false;
+			}
+			
+			if (v != obj.running) {
+				obj.startTime = Conductor.get_instance().songPosition - obj.startTime; // it works trust me
+			}
+			
+			return obj.running = v;
+		};
+		
+		obj.completed = function():Bool {
+			if (!obj.exists) {
+				return true;
+			}
+			
+			var completed:Bool = obj.events.length == 0;
+			if (completed) {
+				obj.running = false;
+			}
+			
+			return completed;
+		};
+		
+		obj.update = function():Void {
+			if (!obj.exists || !obj.get_running()) {
+				return;
+			}
+			
+			while (obj.events.length > 0 && obj.events[0].time + obj.startTime <= Conductor.get_instance().songPosition) {
+				obj.events.shift().callback();
+			}
+			
+			if (obj.completed()) {
+				obj.destroy();
+			}
+		};
+		
+		obj.destroy = function():Void {
+			obj.events.resize(0);
+			
+			obj.running = false;
+			
+			alive.remove(obj);
+			obj.exists = false;
+		};
+		
+		if (events.length == 0) {
+			obj.destroy();
+			return obj;
+		}
+		
+		for (event in events) {
+			event.time *= mult * 1000;
+			obj.events.push(event);
+		}
+		
+		ArraySort.sort(obj.events, function(a:SequenceEvent, b:SequenceEvent):Int {
+			if (a.time < b.time) {
+				return -1;
+			}
+			
+			if (a.time > b.time) {
+				return 1;
+			}
+			
+			return 0;
+		});
+		
+		obj.exists = true;
+		obj.set_running(start);
+		
+		alive.push(obj);
+		
+		return obj;
+	}
+	
+	private var alive:Array<SongSequence> = new Array();
+	override public function onUpdate(event:UpdateScriptEvent):Void {
+		for (obj in alive) {
+			obj.update();
+		}
+	}
+}

@@ -1,0 +1,28 @@
+package be.shader.shaders;
+
+import funkin.Assets;
+import funkin.Paths;
+import funkin.modding.base.ScriptedFlxRuntimeShader;
+
+/**
+ * A shader for adjusting the saturation of the texture.
+ */
+class SaturationShader extends ScriptedFlxRuntimeShader {
+	public function new() {
+		super(Assets.getText(Paths.frag("beast-engine/saturation")));
+		
+		set_saturation(saturation);
+	}
+	
+	/**
+	 * The saturation of the texture.
+	 * -1 is inverted, 0 is grayscale, 1 is normal, 2 is double saturation, etc.
+	 * 
+	 * Defaults to `1` (disabled).
+	 */
+	public var saturation:Float = 1;
+	public function set_saturation(v:Float):Float {
+		setFloat("u_saturation", v);
+		return saturation = v;
+	}
+}

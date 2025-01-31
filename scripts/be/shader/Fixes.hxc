@@ -1,0 +1,36 @@
+package be.shader;
+
+import flixel.FlxG;
+
+import funkin.modding.module.ScriptedModule;
+
+/**
+ * Globally fixes incorrect shader coordinates when the game is resized.
+ * 
+ * Credit to @Raltyro for the original code.
+ */
+class ShaderCoordFix extends ScriptedModule {
+	public function new() {
+		super("be.shader.Fixes.ShaderCoordFix", -2147483648);
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+		
+		FlxG.signals.gameResized.add(function(width:Int, height:Int):Void {
+			if (FlxG.cameras != null) {
+				for (camera in FlxG.cameras.list) {
+					if (camera != null && camera.filters != null) {
+						camera.flashSprite.__cacheBitmap = null;
+						camera.flashSprite.__cacheBitmapData = null;
+					}
+				}
+			}
+			
+			if (FlxG.game != null) {
+				FlxG.game.__cacheBitmap = null;
+				FlxG.game.__cacheBitmapData = null;
+			}
+		});
+	}
+}

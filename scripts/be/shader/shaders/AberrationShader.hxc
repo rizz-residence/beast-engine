@@ -1,0 +1,52 @@
+package be.shader.shaders;
+
+import funkin.Assets;
+import funkin.Paths;
+import funkin.modding.base.ScriptedFlxRuntimeShader;
+
+/**
+ * A shader that allows shifting the color channels.
+ * Primarily intended for chromatic aberration.
+ */
+class AberrationShader extends ScriptedFlxRuntimeShader {
+	public function new() {
+		super(Assets.getText(Paths.frag("beast-engine/aberration")));
+		
+		set_offsetR(offsetR);
+		set_offsetG(offsetG);
+		set_offsetB(offsetB);
+	}
+	
+	/**
+	 * The offset of the red channel in shader space.
+	 * 
+	 * Defaults to `0, 0`.
+	 */
+	public var offsetR:Array<Float> = [0, 0];
+	public function set_offsetR(v:Array<Float>):Array<Float> {
+		setFloatArray("u_offsetR", v);
+		return offsetR = v;
+	}
+	
+	/**
+	 * The offset of the green channel in shader space.
+	 * 
+	 * Defaults to `0, 0`.
+	 */
+	public var offsetG:Array<Float> = [0, 0];
+	public function set_offsetG(v:Array<Float>):Array<Float> {
+		setFloatArray("u_offsetG", v);
+		return offsetG = v;
+	}
+	
+	/**
+	 * The offset of the blue channel in shader space.
+	 * 
+	 * Defaults to `0, 0`.
+	 */
+	public var offsetB:Array<Float> = [0, 0];
+	public function set_offsetB(v:Array<Float>):Array<Float> {
+		setFloatArray("u_offsetB", v);
+		return offsetB = v;
+	}
+}

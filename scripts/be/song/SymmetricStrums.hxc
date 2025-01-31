@@ -1,0 +1,58 @@
+package be.song;
+
+import flixel.FlxG;
+
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+import funkin.util.Constants;
+
+/**
+ * A simple helper class that makes the strumlines symmetric like in other engines.
+ * Activate and deactivate this module only as necessary or it might unintentionally affect other mods.
+ * 
+ * Example: see usages in examples for
+ * - `be.song.SongHelper`
+ */
+class SymmetricStrums extends ScriptedModule {
+	public function new() {
+		super("be.song.SymmetricStrums", -2147483647);
+	}
+	
+	/**
+	 * The padding from the left and right edges of the screen for the opponent and player strumlines respectively.
+	 */
+	public var edgePadding:Float = Constants.STRUMLINE_X_OFFSET * 2;
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+		
+		bind();
+		hook();
+	}
+	
+	private function hook():Void {
+		ModuleHandler.getModule("be.reloader.Reloader").scriptGet("reloadPre").set("be.song.SymmetricStrums", {
+			priority: -2147483647,
+			callback: "onReload"
+		});
+	}
+	
+	public function onReload():Void {
+		bind();
+		hook();
+	}
+	
+	private function bind():Void {
+		ModuleHandler.getModule("be.song.SongHelper").scriptGet("callbacks").createPersist.push({
+			callback: function(vars:Dynamic):Void {
+				if (!active) {
+					return;
+				}
+				
+				PlayState.instance.opponentStrumline.x = edgePadding;
+				PlayState.instance.playerStrumline.x = FlxG.width - PlayState.instance.playerStrumline.width - edgePadding;
+			}
+		});
+	}
+}
