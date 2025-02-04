@@ -1,6 +1,6 @@
 package be.menu;
 
-import flixel.FlxBasic;
+import flixel.FlxObject;
 
 import funkin.modding.module.ScriptedModule;
 
@@ -21,13 +21,13 @@ typedef MenuItemObj = {
 	/**
 	 * Arbitrary related container object.
 	 */
-	container:Null<FlxBasic>,
+	container:Null<FlxObject>,
 	
 	/**
 	 * The hitbox of the item. Only used for mouse-based items.
 	 * Uses `container` if `null`.
 	 */
-	hitbox:Null<FlxBasic>,
+	hitbox:Null<FlxObject>,
 	
 	/**
 	 * Whether the item can be interacted with.
@@ -139,13 +139,13 @@ typedef MenuItemData = {
 	/**
 	 * Arbitrary related container object.
 	 */
-	container:Null<FlxBasic>,
+	container:Null<FlxObject>,
 	
 	/**
 	 * The hitbox of the item. Only used for mouse-based items.
 	 * Uses `container` if `null`.
 	 */
-	hitbox:Null<FlxBasic>,
+	hitbox:Null<FlxObject>,
 	
 	/**
 	 * Whether the item can be interacted with.
@@ -221,12 +221,12 @@ typedef MenuItemData = {
 	onDirectionRelease:Null<(Array<Bool>)->Void>,
 	
 	/**
-	 * Called when the item is pressed.
+	 * Called when the item is pressed, either with the `ACCEPT` keybind for keyboard-based items or with the mouse for mouse-based items.
 	 */
 	onPress:Null<()->Void>,
 	
 	/**
-	 * Called when the item is held down.
+	 * Called when the item is held down after the initial press.
 	 */
 	onHold:Null<()->Void>,
 	
