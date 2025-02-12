@@ -1,0 +1,191 @@
+package be.assets;
+
+import haxe.ds.StringMap;
+
+import lime.app.Future;
+
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+
+/**
+ * Object that contains asset paths.
+ */
+typedef AssetParams = {
+	/**
+	 * Paths to image files, like what you would pass into `Paths.image()`.
+	 */
+	images:Null<Array>,
+	
+	/**
+	 * Paths to sound files, like what you would pass into `Paths.sound()`.
+	 */
+	sounds:Null<Array>,
+	
+	/**
+	 * Paths to music files, like what you would pass into `Paths.music()`.
+	 */
+	music:Null<Array>,
+	
+	/**
+	 * Paths to JSON files, like what you would pass into `Paths.json()`.
+	 */
+	json:Null<Array>,
+	
+	/**
+	 * Paths to text files, like what you would pass into `Paths.txt()`.
+	 */
+	text:Null<Array>
+}
+
+/**
+ * Called when an asset finishes caching in the async thread.
+ * 
+ * @param key The asset path.
+ * @param percentDone The percent of all assets in the list that have been cached, from 0 to 1.
+ * @param dt The time it took to cache the asset in seconds.
+ */
+typedef OnFileCached = (String, Float, Float)->Void
+
+/**
+ * A simple helper module for managing asset lists to use with `be.assets.Assets`.
+ * 
+ * Example:
+ * ```haxe
+ * package exampleMod;
+ * 
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.modding.module.ScriptedModule;
+ * 
+ * class ExampleAssetLists extends ScriptedModule {
+ *     public function new() {
+ *         super("example.ExampleAssetLists", 0);
+ *     }
+ *     
+ *     override public function onCreate(event:ScriptEvent):Void {
+ *         active = false;
+ *         
+ *         init();
+ *     }
+ *     
+ *     private function init():Void {
+ *         setupGlobalList();
+ *         setupMenuList();
+ *     }
+ *     
+ *     private function setupGlobalList():Void {
+ *         var globalList:Dynamic = {
+ *             images: [
+ *                 "example/global/autosaveIcon"
+ *             ]
+ *         };
+ *         
+ *         ModuleHandler.getModule("be.assets.AssetLists").scriptGet("lists").set("example.globalList", globalList);
+ *         ModuleHandler.getModule("be.assets.AssetLists").scriptCall("cacheList", ["example.globalList"]);
+ *     }
+ *     
+ *     private function setupMenuList():Void {
+ *         var menuList:Dynamic = {
+ *             images: [
+ *                 "example/menu/logo",
+ *             ],
+ *             
+ *             sounds: [
+ *                 "example/menu/scroll",
+ *                 "example/menu/confirm",
+ *                 "example/menu/cancel"
+ *             ],
+ *             
+ *             music: [
+ *                 "example/menu/music"
+ *             ],
+ *             
+ *             json: [
+ *                 "example/options"
+ *             ]
+ *         };
+ *         
+ *         for (i in 0...10) {
+ *             menuList.images.push("example/menu/entries/" + Std.string(i + 1));
+ *         }
+ *         
+ *         ModuleHandler.getModule("be.assets.AssetLists").scriptGet("lists").set("example.menuList", menuList);
+ *     }
+ * }
+ * ```
+ * See also:
+ * - `be.assets.Assets`
+ */
+class AssetLists extends ScriptedModule {
+	public function new() {
+		super("be.assets.AssetLists", -2147483646);
+	}
+	
+	/**
+	 * All asset lists currently registered.
+	 */
+	public var lists:StringMap<AssetParams> = new StringMap();
+	
+	/**
+	 * Helper function for `be.assets.Assets.cacheAssets()`.
+	 * 
+	 * @param id The ID of the asset list to cache.
+	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
+	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
+	 */
+	public function cacheList(id:String, forPlayState:Bool = false, persistent:Bool = false):Void {
+		ModuleHandler.getModule("be.assets.Assets").scriptCall("cacheAssets", [lists.get(id), forPlayState, persistent]);
+	}
+	
+	/**
+	 * Helper function for `be.assets.Assets.cacheAssetsAsync()`.
+	 * 
+	 * @param id The ID of the asset list to cache.
+	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
+	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
+	 * @param onFileCached Called when each asset finishes caching in the async thread.
+	 * @param onComplete Called when all assets are cached.
+	 * @return The `Future` promise object.
+	 */
+	public function cacheListAsync(
+		id:String,
+		forPlayState:Bool = false,
+		persistent:Bool = false,
+		?onFileCached:OnFileCached,
+		?onComplete:()->Void
+	):Null<Future> {
+		return ModuleHandler.getModule("be.assets.Assets").scriptCall("cacheAssetsAsync", [lists.get(id), forPlayState, persistent, onFileCached, onComplete]);
+	}
+	
+	/**
+	 * Helper function for `be.assets.Assets.uncacheAssets()`.
+	 * 
+	 * @param id The ID of the asset list to uncache.
+	 * @param purgeAfter If `true`, will purge the cache after removing the assets.
+	 * @param runGC Whether to run the garbage collector after purging, if `purgeAfter` is `true`.
+	 */
+	public function uncacheList(id:String, purgeAfter:Bool = false, runGC:Bool = false):Void {
+		ModuleHandler.getModule("be.assets.Assets").scriptCall("uncacheAssets", [lists.get(id), purgeAfter, runGC]);
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		active = false;
+		
+		hook();
+	}
+	
+	private function hook():Void {
+		ModuleHandler.getModule("be.reloader.Reloader").scriptGet("reloadPost").set("be.assets.AssetLists", {
+			priority: -2147483647,
+			callback: "onReload",
+			variables: function():StringMap {
+				return [
+					"lists" => lists
+				];
+			}
+		});
+	}
+	
+	public function onReload():Void {
+		hook();
+	}
+}

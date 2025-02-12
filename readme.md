@@ -12,6 +12,7 @@ This repo is open to contribution!
 
 ## Features
 
+- `be.assets` - Asset caching helper package.
 - `be.math` - Useful math-related stuff.
 - `be.menu` - A custom menu helper package.
 - `be.neocam` - A versatile camera controller.

@@ -4,13 +4,13 @@
 	"homepage": "https://github.com/rizz-residence/beast-engine",
 	
 	"contributors": [
-		{"name": "cyn0x8", "role": "coder", "url": "https://github.com/cyn0x8"},
-		
-		{"name": "Raltyro", "role": "shader coord fix", "url": "https://github.com/Raltyro"}
+		{"name": "cyn0x8", "url": "https://github.com/cyn0x8"},
+		{"name": "Raltyro", "url": "https://github.com/Raltyro"},
+		{"name": "FixedData", "url": "https://github.com/FixedData"}
 	],
 	
 	"license": "MIT",
 	
 	"api_version": "0.5.0",
-	"mod_version": "1.0.1-dev"
+	"mod_version": "1.1.0-dev"
 }

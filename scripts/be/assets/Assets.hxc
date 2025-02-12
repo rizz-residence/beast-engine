@@ -1,0 +1,786 @@
+package be.assets;
+
+import Array;
+import String;
+
+import haxe.Timer;
+import haxe.ds.StringMap;
+
+import thx.Types;
+
+import lime.app.Future;
+
+import openfl.media.Sound;
+import openfl.system.System;
+
+import flixel.FlxG;
+import flixel.graphics.FlxGraphic;
+
+import funkin.Assets;
+import funkin.Paths;
+import funkin.graphics.FunkinSprite;
+import funkin.modding.module.ModuleHandler;
+import funkin.modding.module.ScriptedModule;
+import funkin.util.ReflectUtil;
+import funkin.util.SerializerUtil;
+
+/**
+ * Object that contains asset paths.
+ */
+typedef AssetParams = {
+	/**
+	 * Paths to image files, like what you would pass into `Paths.image()`.
+	 */
+	images:Null<Array>,
+	
+	/**
+	 * Paths to sound files, like what you would pass into `Paths.sound()`.
+	 */
+	sounds:Null<Array>,
+	
+	/**
+	 * Paths to music files, like what you would pass into `Paths.music()`.
+	 */
+	music:Null<Array>,
+	
+	/**
+	 * Paths to JSON files, like what you would pass into `Paths.json()`.
+	 */
+	json:Null<Array>,
+	
+	/**
+	 * Paths to text files, like what you would pass into `Paths.txt()`.
+	 */
+	text:Null<Array>
+}
+
+/**
+ * Called when an asset finishes caching in the async thread.
+ * 
+ * @param key The asset path.
+ * @param percentDone The percent of all assets in the list that have been cached, from 0 to 1.
+ * @param dt The time it took to cache the asset in seconds.
+ */
+typedef OnFileCached = (String, Float, Float)->Void
+
+/**
+ * A helper module for asset caching/retrieval, with async support.
+ * 
+ * Example:
+ * ```haxe
+ * // Example init state that caches the assets for a menu state before opening it.
+ * package exampleMod.states;
+ * 
+ * import flixel.FlxG;
+ * 
+ * import funkin.modding.base.ScriptedMusicBeatState;
+ * import funkin.modding.module.ModuleHandler;
+ * 
+ * class ExampleInitState extends ScriptedMusicBeatState {
+ *     override public function create():Void {
+ *         super.create();
+ *         
+ *         persistentUpdate = true;
+ *         
+ *         ModuleHandler.getModule("be.assets.AssetLists").scriptCall("cacheListAsync", [
+ *             "example.menuList",
+ *             false,
+ *             false,
+ *             updateMenuCacheProgress,
+ *             menuCacheComplete
+ *         ]);
+ *     }
+ *     
+ *     // Using "real" functions with unique parameter names here instead of anonymous functions because hscript
+ *     // behaves a bit weirdly with multi-threading...
+ *     
+ *     private function updateMenuCacheProgress(_key:String, _percentDone:Float, _dt:Float):Void {
+ *         var percentDoneString:String = Std.string(Math.floor(_percentDone * 100));
+ *         var dtString:String = Std.string(Math.floor(_dt * 100) / 100);
+ *         trace("ExampleMod: cached \"" + _key + "\" (" + dtString + "s) (" + percentDoneString + "% done)");
+ *     }
+ *     
+ *     private function menuCacheComplete():Void {
+ *         FlxG.switchState(ScriptedMusicBeatState.init("example.states.MenuState"));
+ *     }
+ * }
+ * ```
+ * See also:
+ * - `be.assets.AssetLists`
+ */
+class Assets extends ScriptedModule {
+	public function new() {
+		super("be.assets.Assets", -2147483647);
+	}
+	
+	/**
+	 * Keys of assets that are currently cached and "active" (won't be deleted on purge).
+	 */
+	public var activeKeys:Array<String> = new Array();
+	
+	/**
+	 * Keys of image assets that are intended for `PlayState` to load in, like characters, stage props,
+	 * icons, etc.
+	 * 
+	 * Normally, image assets cached by this module are taken out of `FunkinSprite` cache temporarily
+	 * so that they aren't deleted while `FunkinSprite` clears its cache during `PlayState` creation.
+	 * Keys in this array won't do this, so just be aware that if `PlayState` doesn't use these assets,
+	 * they will be deleted from cache.
+	 */
+	public var playStateKeys:Array<String> = new Array();
+	
+	/**
+	 * Keys of assets that will not be deleted from cache, even if not marked as active.
+	 * 
+	 * Incompatible with `playStateKeys`. Trying to use this for `PlayState` assets won't save on
+	 * loading times, and will just waste memory...
+	 */
+	public var persistentKeys:Array<String> = new Array();
+	
+	/**
+	 * All assets cached by this module.
+	 */
+	public var cache:Dynamic = {
+		/**
+		 * A map of image keys to their `FlxGraphic` objects.
+		 */
+		images: new StringMap(),
+		
+		/**
+		 * A map of sound keys to their `Sound` objects.
+		 */
+		sounds: new StringMap(),
+		
+		/**
+		 * A map of music keys to their `Sound` objects.
+		 */
+		music: new StringMap(),
+		
+		/**
+		 * A map of JSON keys to their anonymous objects.
+		 */
+		json: new StringMap(),
+		
+		/**
+		 * A map of text keys to their string contents.
+		 */
+		text: new StringMap()
+	};
+	
+	/**
+	 * Caches a list of assets.
+	 * 
+	 * @param params The asset paths to cache.
+	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
+	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
+	 */
+	public function cacheAssets(params:AssetParams, forPlayState:Bool = false, persistent:Bool = false):Void {
+		if (!Types.isAnonymousObject(params)) {
+			return;
+		}
+		
+		for (type in ["images", "sounds", "music", "json", "text"]) {
+			if (ReflectUtil.hasAnonymousField(params, type) && Std.isOfType(ReflectUtil.getAnonymousField(params, type), Array)) {
+				for (path in ReflectUtil.getAnonymousField(params, type)) {
+					getAsset(type, path, false);
+					if (type == "image") {
+						if (persistent) {
+							persistentKeys.push(path);
+						} else if (forPlayState) {
+							playStateKeys.push(path);
+						}
+					}
+				}
+			}
+		}
+		
+		clearDuplicates();
+	}
+	
+	/**
+	 * Asynchronously caches a list of assets.
+	 * Useful for loading screens and background caching.
+	 * 
+	 * @param params The asset paths to cache.
+	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
+	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
+	 * @param onFileCached Called when each asset finishes caching in the async thread.
+	 * @param onComplete Called when all assets are cached.
+	 * @return The `Future` promise object.
+	 */
+	public function cacheAssetsAsync(
+		params:AssetParams,
+		forPlayState:Bool = false,
+		persistent:Bool = false,
+		?onFileCached:OnFileCached,
+		?onComplete:()->Void
+	):Null<Future> {
+		if (!Types.isAnonymousObject(params)) {
+			return null;
+		}
+		
+		var asyncParams:AssetParams = {
+			images: new Array(),
+			sounds: new Array(),
+			music: new Array(),
+			json: new Array(),
+			text: new Array()
+		};
+		
+		var assetCount:Float = 0;
+		for (type in ["images", "sounds", "music", "json", "text"]) {
+			if (ReflectUtil.hasAnonymousField(params, type) && Std.isOfType(ReflectUtil.getAnonymousField(params, type), Array)) {
+				for (path in ReflectUtil.getAnonymousField(params, type)) {
+					ReflectUtil.getAnonymousField(asyncParams, type).push(path);
+					assetCount++;
+				}
+			}
+		}
+		
+		if (onComplete == null) {
+			onComplete = function():Void {};
+		}
+		
+		if (assetCount == 0) {
+			onComplete();
+			return null;
+		}
+		
+		var onFileCached_persist:(String, Float, Float)->Void = null;
+		if (onFileCached == null) {
+			onFileCached_persist = function(key:String, percentDone:Float, dt:Float):Void {};
+		} else {
+			onFileCached_persist = onFileCached;
+		}
+		
+		var onComplete_persist:()->Void = onComplete;
+		
+		var future:Future = new Future(function():Bool {
+			var cachedCount:Float = 0;
+			var dt:Float = 0;
+			for (type in ["images", "sounds", "music", "json", "text"]) {
+				for (path in ReflectUtil.getAnonymousField(asyncParams, type)) {
+					dt = Timer.stamp();
+					getAsset(type, path, false);
+					dt = Timer.stamp() - dt;
+					cachedCount++;
+					onFileCached_persist(path, cachedCount / assetCount, dt);
+				}
+			}
+			
+			return true;
+		}, true);
+		
+		var persistent_persist:Bool = persistent;
+		var forPlayState_persist:Bool = forPlayState;
+		future.onComplete(function(_:Dynamic):Void {
+			if (persistent_persist) {
+				for (path in asyncParams.images) {
+					persistentKeys.push(path);
+				}
+			} else if (forPlayState_persist) {
+				for (path in asyncParams.images) {
+					playStateKeys.push(path);
+				}
+			}
+			
+			clearDuplicates();
+			
+			onComplete_persist();
+		});
+		
+		return future;
+	}
+	
+	/**
+	 * Mark assets as "inactive"/for deletion on the next purge if they are not persistent.
+	 * This will also remove them from `playStateKeys`.
+	 * 
+	 * @param params The asset paths to uncache.
+	 * @param purgeAfter If `true`, will purge the cache after removing the assets.
+	 * @param runGC Whether to run the garbage collector after purging, if `purgeAfter` is `true`.
+	 */
+	 public function uncacheAssets(params:AssetParams, purgeAfter:Bool = false, runGC:Bool = false):Void {
+		if (!Types.isAnonymousObject(params)) {
+			return;
+		}
+		
+		for (type in ["images", "sounds", "music", "json", "text"]) {
+			if (ReflectUtil.hasAnonymousField(params, type) && Std.isOfType(ReflectUtil.getAnonymousField(params, type), Array)) {
+				for (path in ReflectUtil.getAnonymousField(params, type)) {
+					activeKeys.remove(path);
+					playStateKeys.remove(path);
+				}
+			}
+		}
+		
+		if (purgeAfter) {
+			purge(false, runGC);
+		}
+	}
+	
+	/**
+	 * Gets an asset and caches it if it isn't already.
+	 * 
+	 * @param type The type of asset as a string.
+	 * @param path The path to the image.
+	 * @param isKey If `true`, the path will not be passed through `Paths.image()`.
+	 * @return The cached asset, or `null` if the function failed to get the asset.
+	 */
+	public function getAsset(type:String, path:String, isKey = false):Null<Dynamic> {
+		return switch(type) {
+			case "image", "images": getImage(path, isKey);
+			case "sound", "sounds": getSound(path, isKey);
+			case "music": getMusic(path, isKey);
+			case "json": getJSON(path, isKey);
+			case "text": getText(path, isKey);
+			default: null;
+		}
+	}
+	
+	/**
+	 * Gets an image asset and caches it if it isn't already.
+	 * 
+	 * @param path The path to the image.
+	 * @param isKey If `true`, the path will not be passed through `Paths.image()`.
+	 * @return The cached graphic, or `null` if the function failed to get the asset.
+	 */
+	public function getImage(path:String, isKey:Bool = false):Null<FlxGraphic> {
+		if (!Std.isOfType(path, String)) {
+			return null;
+		}
+		
+		var key:String = isKey ? path : Paths.image(path);
+		
+		var graphic:Null<FlxGraphic> = cache.images.get(key);
+		var currentCachedGraphic:Null<FlxGraphic> = FunkinSprite.currentCachedTextures.get(key);
+		var previousCachedGraphic:Null<FlxGraphic> = FunkinSprite.previousCachedTextures.get(key);
+		
+		if (previousCachedGraphic != null) {
+			if (currentCachedGraphic != null && previousCachedGraphic != currentCachedGraphic) {
+				FlxG.bitmap.remove(currentCachedGraphic);
+				currentCachedGraphic.destroy();
+			}
+			
+			FunkinSprite.currentCachedTextures.set(key, graphic);
+			FunkinSprite.previousCachedTextures.remove(key);
+		}
+		
+		if (graphic != null) {
+			if (currentCachedGraphic != null && graphic != currentCachedGraphic) {
+				FlxG.bitmap.remove(currentCachedGraphic);
+				currentCachedGraphic.destroy();
+			}
+			
+			FunkinSprite.currentCachedTextures.set(key, graphic);
+			return graphic;
+		}
+		
+		FunkinSprite.cacheTexture(key);
+		graphic = FunkinSprite.currentCachedTextures.get(key);
+		if (graphic == null) {
+			return null;
+		}
+		
+		cache.images.set(key, graphic);	
+		if (!activeKeys.contains(key)) {
+			activeKeys.push(key);
+		}
+		
+		return graphic;
+	}
+	
+	/**
+	 * Gets a sound asset and caches it if it isn't already.
+	 * 
+	 * @param path The path to the sound.
+	 * @param isKey If `true`, the path will not be passed through `Paths.sound()`.
+	 * @return The cached sound, or `null` if the function failed to get the asset.
+	 */
+	public function getSound(path:String, isKey:Bool = false):Null<Sound> {
+		if (!Std.isOfType(path, String)) {
+			return null;
+		}
+		
+		var key:String = isKey ? path : Paths.sound(path);
+		
+		var sound:Null<Sound> = cache.sounds.get(key);
+		if (sound != null) {
+			return sound;
+		}
+		
+		if (!Assets.exists(key, "SOUND")) {
+			return null;
+		}
+		
+		sound = Assets.getSound(key);
+		
+		cache.sounds.set(key, sound);
+		if (!activeKeys.contains(key)) {
+			activeKeys.push(key);
+		}
+		
+		return sound;
+	}
+	
+	/**
+	 * Gets a music asset and caches it if it isn't already.
+	 * 
+	 * @param path The path to the music.
+	 * @param isKey If `true`, the path will not be passed through `Paths.music()`.
+	 * @return The cached sound, or `null` if the function failed to get the asset.
+	 */
+	public function getMusic(path:String, isKey:Bool = false):Null<Sound> {
+		if (!Std.isOfType(path, String)) {
+			return null;
+		}
+		
+		var key:String = isKey ? path : Paths.music(path);
+		
+		var sound:Null<Sound> = cache.music.get(key);
+		if (sound != null) {
+			return sound;
+		}
+		
+		if (!Assets.exists(key, "SOUND")) {
+			return null;
+		}
+		
+		sound = Assets.getSound(key);
+		
+		cache.music.set(key, sound);
+		if (!activeKeys.contains(key)) {
+			activeKeys.push(key);
+		}
+		
+		return sound;
+	}
+	
+	/**
+	 * Gets a JSON asset and caches it if it isn't already.
+	 * 
+	 * @param path The path to the JSON file.
+	 * @param isKey If `true`, the path will not be passed through `Paths.json()`.
+	 * @return The cached object, or `null` if the function failed to get the asset.
+	 */
+	public function getJSON(path:String, isKey:Bool = false):Null<Dynamic> {
+		if (!Std.isOfType(path, String)) {
+			return null;
+		}
+		
+		var key:String = isKey ? path : Paths.json(path);
+		
+		var json:Dynamic = cache.json.get(key);
+		if (json != null) {
+			return json;
+		}
+		
+		if (!Assets.exists(key, "TEXT")) {
+			return null;
+		}
+		
+		var object:Null<Dynamic> = SerializerUtil.fromJSON(Assets.getText(key));
+		if (object == null) {
+			return null;
+		}
+		
+		cache.json.set(key, object);
+		if (!activeKeys.contains(key)) {
+			activeKeys.push(key);
+		}
+		
+		return object;
+	}
+	
+	/**
+	 * Gets a text asset and caches it if it isn't already.
+	 * 
+	 * @param path The path to the text file.
+	 * @param isKey If `true`, the path will not be passed through `Paths.txt()`.
+	 * @return The cached string, or `null` if the function failed to get the asset.
+	 */
+	public function getText(path:String, isKey:Bool = false):String {
+		if (!Std.isOfType(path, String)) {
+			return null;
+		}
+		
+		var key:String = isKey ? path : Paths.txt(path);
+		
+		var text:String = cache.text.get(key);
+		if (text != null) {
+			return text;
+		}
+		
+		if (!Assets.exists(key, "TEXT")) {
+			return null;
+		}
+		
+		text = Assets.getText(key);
+		
+		cache.text.set(key, text);
+		if (!activeKeys.contains(key)) {
+			activeKeys.push(key);
+		}
+		
+		return text;
+	}
+	
+	/**
+	 * Removes duplicate assets, if any.
+	 */
+	public function clearDuplicates():Void {
+		var uniqueActive:Array<String> = new Array();
+		for (key in activeKeys) {
+			if (!uniqueActive.contains(key)) {
+				uniqueActive.push(key);
+			}
+		}
+		
+		var uniquePlayState:Array<String> = new Array();
+		for (key in playStateKeys) {
+			if (!uniquePlayState.contains(key)) {
+				uniquePlayState.push(key);
+			}
+		}
+		
+		var uniquePersist:Array<String> = new Array();
+		for (key in persistentKeys) {
+			if (!uniquePersist.contains(key)) {
+				uniquePersist.push(key);
+			}
+		}
+		
+		activeKeys = uniqueActive;
+		playStateKeys = uniquePlayState;
+		persistentKeys = uniquePersist;
+		
+		for (key in cache.images.keys()) {
+			var graphic:FlxGraphic = cache.images.get(key);
+			var currentCachedGraphic:Null<FlxGraphic> = FunkinSprite.currentCachedTextures.get(key);
+			var previousCachedGraphic:Null<FlxGraphic> = FunkinSprite.previousCachedTextures.get(key);
+			
+			if (previousCachedGraphic != null) {
+				if (currentCachedGraphic != null && previousCachedGraphic != currentCachedGraphic) {
+					FlxG.bitmap.remove(currentCachedGraphic);
+					currentCachedGraphic.destroy();
+				}
+				
+				FunkinSprite.currentCachedTextures.set(key, graphic);
+				FunkinSprite.previousCachedTextures.remove(key);
+			}
+			
+			if (currentCachedGraphic != null && graphic != currentCachedGraphic) {
+				FlxG.bitmap.remove(currentCachedGraphic);
+				currentCachedGraphic.destroy();
+			}
+			
+			FunkinSprite.currentCachedTextures.set(key, graphic);
+		}
+	}
+	
+	/**
+	 * Deletes inactive assets from cache.
+	 * 
+	 * @param force If `true`, will delete all active and inactive assets, excluding persistent ones.
+	 * @param runGC Whether to run the garbage collector after purging.
+	 */
+	public function purge(force:Bool = false, runGC:Bool = false):Void {
+		clearDuplicates();
+		
+		purgeInactiveImages(force);
+		purgeInactiveSounds(force);
+		purgeInactiveMusic(force);
+		purgeInactiveJSON(force);
+		purgeInactiveText(force);
+		
+		activeKeys.resize(0);
+		
+		for (key in cache.images.keys()) {
+			activeKeys.push(key);
+		}
+		
+		for (key in cache.sounds.keys()) {
+			activeKeys.push(key);
+		}
+		
+		for (key in cache.music.keys()) {
+			activeKeys.push(key);
+		}
+		
+		for (key in cache.json.keys()) {
+			activeKeys.push(key);
+		}
+		
+		for (key in cache.text.keys()) {
+			activeKeys.push(key);
+		}
+		
+		for (type in ["images", "sounds", "music", "json", "text"]) {
+				
+		}
+		
+		if (runGC) {
+			System.gc();
+		}
+	}
+	
+	override public function onCreate(event:ScriptEvent):Void {
+		hook();
+	}
+	
+	private function hook():Void {
+		ModuleHandler.getModule("be.reloader.Reloader").scriptGet("reloadPre").set("be.assets.Assets", {
+			priority: -2147483648,
+			callback: "onReload",
+			variables: function():StringMap {
+				return [
+					"activeKeys" => activeKeys,
+					"playStateKeys" => playStateKeys,
+					"persistentKeys" => persistentKeys,
+					
+					"cache" => cache
+				];
+			}
+		});
+	}
+	
+	public function onReload():Void {
+		removeFromFunkinSpriteCache();
+		purge(false, true);
+		
+		hook();
+	}
+	
+	override public function onStateChangeBegin(event:StateChangeScriptEvent):Void {
+		removeFromFunkinSpriteCache();
+		purge(false, true);
+	}
+	
+	override public function onStateChangeEnd(event:StateChangeScriptEvent):Void {
+		for (key in activeKeys) {
+			if (cache.images.exists(key)) {
+				getImage(key, true);
+			}
+		}
+	}
+	
+	private function purgeInactiveImages():Void {
+		var toRemove:Array<String> = new Array();
+		for (key in cache.images.keys()) {
+			if (!activeKeys.contains(key) && !persistentKeys.contains(key)) {
+				toRemove.push(key);
+			}
+		}
+		
+		for (key in toRemove) {
+			FunkinSprite.currentCachedTextures.remove(key);
+			FunkinSprite.previousCachedTextures.remove(key);
+			
+			var graphic:FlxGraphic = cache.images.get(key);
+			if (graphic != null) {
+				FlxG.bitmap.remove(graphic);
+				graphic.destroy();
+			}
+			
+			activeKeys.remove(key);
+			playStateKeys.remove(key);
+			persistentKeys.remove(key);
+			
+			cache.images.remove(key);
+		}
+	}
+	
+	private function purgeInactiveSounds():Void {
+		var toRemove:Array<String> = new Array();
+		for (key in cache.sounds.keys()) {
+			if (!activeKeys.contains(key) && !persistentKeys.contains(key)) {
+				toRemove.push(key);
+			}
+		}
+		
+		for (key in toRemove) {
+			activeKeys.remove(key);
+			playStateKeys.remove(key);
+			persistentKeys.remove(key);
+			
+			cache.sounds.remove(key);
+		}
+	}
+	
+	private function purgeInactiveMusic():Void {
+		var toRemove:Array<String> = new Array();
+		for (key in cache.music.keys()) {
+			if (!activeKeys.contains(key) && !persistentKeys.contains(key)) {
+				toRemove.push(key);
+			}
+		}
+		
+		for (key in toRemove) {
+			activeKeys.remove(key);
+			playStateKeys.remove(key);
+			persistentKeys.remove(key);
+			
+			cache.music.remove(key);
+		}
+	}
+	
+	private function purgeInactiveJSON():Void {
+		var toRemove:Array<String> = new Array();
+		for (key in cache.json.keys()) {
+			if (!activeKeys.contains(key) && !persistentKeys.contains(key)) {
+				toRemove.push(key);
+			}
+		}
+		
+		for (key in toRemove) {
+			activeKeys.remove(key);
+			playStateKeys.remove(key);
+			persistentKeys.remove(key);
+			
+			cache.json.remove(key);
+		}
+	}
+	
+	private function purgeInactiveText():Void {
+		var toRemove:Array<String> = new Array();
+		for (key in cache.text.keys()) {
+			if (!activeKeys.contains(key) && !persistentKeys.contains(key)) {
+				toRemove.push(key);
+			}
+		}
+		
+		for (key in toRemove) {
+			activeKeys.remove(key);
+			playStateKeys.remove(key);
+			persistentKeys.remove(key);
+			
+			cache.text.remove(key);
+		}
+	}
+	
+	private function removeFromFunkinSpriteCache():Void {
+		for (key in activeKeys) {
+			if (cache.images.exists(key) && (!playStateKeys.contains(key) || persistentKeys.contains(key))) {
+				FunkinSprite.currentCachedTextures.remove(key);
+				FunkinSprite.previousCachedTextures.remove(key);
+			}
+		}
+	}
+	
+	/**
+	 * Only use this if it's really, really necessary.
+	 */
+	public function reset():Void {
+		playStateKeys.resize(0);
+		persistentKeys.resize(0);
+		
+		removeFromFunkinSpriteCache();
+		activeKeys.resize(0);
+		
+		purge(true, true);
+	}
+	
+	override public function onDestroy(event:ScriptEvent):Void {
+		purge(false, true);
+	}
+}
