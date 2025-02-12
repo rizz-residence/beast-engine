@@ -86,22 +86,17 @@ typedef OnFileCached = (String, Float, Float)->Void
  *             "example.menuList",
  *             false,
  *             false,
- *             updateMenuCacheProgress,
- *             menuCacheComplete
+ *             
+ *             function(path:String, percentDone:Float, dt:Float):Void {
+ *                 var percentDoneString:String = Std.string(Math.floor(percentDone * 100));
+ *                 var dtString:String = Std.string(Math.floor(dt * 100) / 100);
+ *                 trace("ExampleMod: cached \"" + path + "\" (" + dtString + "s) (" + percentDoneString + "% done)");
+ *             },
+ *             
+ *             function():Void {
+ *                 FlxG.switchState(ScriptedMusicBeatState.init("example.states.MenuState"));
+ *             }
  *         ]);
- *     }
- *     
- *     // Using "real" functions with unique parameter names here instead of anonymous functions because hscript
- *     // behaves a bit weirdly with multi-threading...
- *     
- *     private function updateMenuCacheProgress(_path:String, _percentDone:Float, _dt:Float):Void {
- *         var percentDoneString:String = Std.string(Math.floor(_percentDone * 100));
- *         var dtString:String = Std.string(Math.floor(_dt * 100) / 100);
- *         trace("ExampleMod: cached \"" + _path + "\" (" + dtString + "s) (" + percentDoneString + "% done)");
- *     }
- *     
- *     private function menuCacheComplete():Void {
- *         FlxG.switchState(ScriptedMusicBeatState.init("example.states.MenuState"));
  *     }
  * }
  * ```
@@ -209,6 +204,8 @@ class Assets extends ScriptedModule {
 	/**
 	 * Asynchronously caches a list of assets.
 	 * Useful for loading screens and background caching.
+	 * 
+	 * Be very careful not to change states or initialize a mod reload while this is running as the game might crash!
 	 * 
 	 * @param params The asset paths to cache.
 	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
