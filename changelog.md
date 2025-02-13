@@ -13,9 +13,11 @@
 - Changes to `be.menu.Menu`
   - Debounce now has a default value of `0.1`.
   - Fixed mouse-based menu items not having hold functionality.
-  - `FlxBasic` usage is now `FlxObject`. (oops)
+  - `FlxBasic` usage is now `FlxObject`.
 - Changes to `be.menu.MenuItem`
-  - `FlxBasic` usage is now `FlxObject`. (oops)
+  - `FlxBasic` usage is now `FlxObject`.
+- Changes to `be.shader.shaders.NoiseShader`
+  - Fixed the `size` uniform having the inverse of intended behavior in the shader. (oops)
 
 ## v1.0.0
 
