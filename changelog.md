@@ -17,7 +17,11 @@
 - Changes to `be.menu.MenuItem`
   - `FlxBasic` usage is now `FlxObject`.
 - Changes to `be.shader.shaders.NoiseShader`
-  - Fixed the `size` uniform having the inverse of intended behavior in the shader. (oops)
+  - Fixed the `size` uniform having the inverse of intended behavior in the shader.
+- Changes to `be.song.SongHelper`
+  - Fixed close callbacks running twice when the song ends normally.
+  - Events now reinstate themselves when moving backwards in the song (if you need to do that).
+  - Stability improvements.
 
 ## v1.0.0
 
