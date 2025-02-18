@@ -423,8 +423,11 @@ class SongHelper extends ScriptedModule {
 		hook();
 	}
 	
+	private var inPlayState:Bool = false;
+	
 	override public function onStateChangeEnd(event:StateChangeScriptEvent):Void {
 		if (Std.isOfType(event.targetState, PlayState)) {
+			inPlayState = true;
 			onPlayStateCreate();
 		} else {
 			reset();
@@ -433,6 +436,7 @@ class SongHelper extends ScriptedModule {
 	
 	override public function onSubStateOpenEnd(event:SubStateScriptEvent):Void {
 		if (Std.isOfType(event.targetState, PlayState) && !PlayState.instance.isMinimalMode) {
+			inPlayState = true;
 			onPlayStateCreate();
 		}
 	}
@@ -500,10 +504,9 @@ class SongHelper extends ScriptedModule {
 	override public function onDestroy(event:ScriptEvent):Void {
 		previousSongTime = null;
 		
-		if (
-			(PlayState.instance != null && PlayState.instance.criticalFailure) ||
-			(!FlxG.keys.justPressed.F5 && !pressedReload)
-		) {
+		if (inPlayState && PlayState.instance != null && !FlxG.keys.justPressed.F5 && !pressedReload) {
+			inPlayState = false;
+			
 			setDefaultVars();
 			
 			doCallbackList(callbacks.closePersist);

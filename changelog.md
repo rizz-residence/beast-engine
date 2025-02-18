@@ -20,8 +20,9 @@
   - Fixed the `size` uniform having the inverse of intended behavior in the shader.
 - Changes to `be.song.SongHelper`
   - Fixed close callbacks running twice when the song ends normally.
+  - Fixed close callbacks running twice when `PlayState` closes as a substate.
   - Events now reinstate themselves when moving backwards in the song (if you need to do that).
-  - Stability improvements.
+  - Small stability improvements.
 
 ## v1.0.0
 
