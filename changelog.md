@@ -23,6 +23,9 @@
   - Fixed close callbacks running twice when `PlayState` closes as a substate.
   - Events now reinstate themselves when moving backwards in the song (if you need to do that).
   - Small stability improvements.
+- Changes to `be.util.GenUtil`
+  - `objectMerge` and `objectPaths` are now iterative instead of recursive to avoid stack overflows.
+  - `objectMerge` and `objectPaths` now have a `deep` parameter.
 
 ## v1.0.0
 
