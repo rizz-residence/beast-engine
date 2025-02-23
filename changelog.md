@@ -14,8 +14,11 @@
   - Debounce now has a default value of `0.1`.
   - Fixed mouse-based menu items not having hold functionality.
   - `FlxBasic` usage is now `FlxObject`.
+  - Small stability improvements.
 - Changes to `be.menu.MenuItem`
   - `FlxBasic` usage is now `FlxObject`.
+  - `onRelease` and `onHold` now have a parameter for how long the button has been held.
+  - `onDirectionPress` and `onDirectionHold` and `onDirectionRelease` now have a parameter for how long each direction has been held.
 - Changes to `be.shader.shaders.NoiseShader`
   - Fixed the `size` uniform having the inverse of intended behavior in the shader.
 - Changes to `be.song.SongHelper`

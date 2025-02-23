@@ -735,20 +735,18 @@ class Menu extends ScriptedModule {
 						if (controls.check("accept", 2) && curItem.enabled) { // JUST_PRESSED
 							curItem.onPress();
 							
-							if (curItem.pressHold) {
-								curItem.pressHoldTick = 0;
-							}
+							curItem.pressHoldTick = 0;
 						} else if (controls.check("accept", -1) && curItem.enabled) { // JUST_RELEASED
-							curItem.onRelease();
+							curItem.onRelease(curItem.pressHoldTick);
 							
-							if (curItem.pressHold) {
-								curItem.pressHoldTick = -1;
-							}
+							curItem.pressHoldTick = -1;
 						} else if (controls.check("accept", 1) && curItem.enabled) { // PRESSED
-							if (curItem.pressHold && curItem.pressHoldTick >= 0) {
+							if (curItem.pressHoldTick >= 0) {
 								curItem.pressHoldTick += elapsed;
 								if (curItem.pressHoldTick >= curItem.pressHoldStart + curItem.pressHoldInterval) {
-									curItem.onHold();
+									if (curItem.pressHold) {
+										curItem.onHold(curItem.pressHoldTick);
+									}
 									
 									curItem.pressHoldTick = curItem.pressHoldStart + (curItem.pressHoldTick - curItem.pressHoldStart) % curItem.pressHoldInterval;
 								}
@@ -778,7 +776,7 @@ class Menu extends ScriptedModule {
 							}
 							
 							if (directionPressTrigger) {
-								prevItem.onDirectionPress(directionPress);
+								prevItem.onDirectionPress(directionPress, obj.navigationHoldTick);
 							}
 							
 							var directionHold:Array<Bool> = [false, false, false, false];
@@ -804,7 +802,7 @@ class Menu extends ScriptedModule {
 								}
 								
 								if (directionHoldTrigger) {
-									prevItem.onDirectionHold(directionHold);
+									prevItem.onDirectionHold(directionHold, obj.navigationHoldTick);
 								}
 							}
 							
@@ -882,7 +880,7 @@ class Menu extends ScriptedModule {
 							}
 							
 							if (directionReleaseTrigger && curItem.enabled) {
-								curItem.onDirectionRelease(directionRelease);
+								curItem.onDirectionRelease(directionRelease, obj.navigationHoldTick);
 							}
 						}
 					}
@@ -927,29 +925,27 @@ class Menu extends ScriptedModule {
 							if (FlxG.mouse.justPressed) {
 								curMouseItem.onPress();
 								
-								if (curMouseItem.pressHold) {
-									curMouseItem.pressHoldTick = 0;
-								}
+								curMouseItem.pressHoldTick = 0;
 							} else if (FlxG.mouse.justReleased) {
-								curMouseItem.onRelease();
+								curMouseItem.onRelease(curMouseItem.pressHoldTick);
 								
-								if (curMouseItem.pressHold) {
-									curMouseItem.pressHoldTick = -1;
-								}
+								curMouseItem.pressHoldTick = -1;
 							} else if (FlxG.mouse.pressed) {
-								if (curMouseItem.pressHold && curMouseItem.pressHoldTick != -1) {
+								if (curMouseItem.pressHoldTick >= 0) {
 									curMouseItem.pressHoldTick += elapsed;
 									if (curMouseItem.pressHoldTick >= curMouseItem.pressHoldStart + curMouseItem.pressHoldInterval) {
-										curMouseItem.onHold();
+										if (curMouseItem.pressHold) {
+											curMouseItem.onHold(curMouseItem.pressHoldTick);
+										}
 										
 										curMouseItem.pressHoldTick = curMouseItem.pressHoldStart + (curMouseItem.pressHoldTick - curMouseItem.pressHoldStart) % curMouseItem.pressHoldInterval;
 									}
 								}
 							}
-						} else if (curMouseItem.pressHold && curMouseItem.pressHoldTick != -1) {
+						} else if (curMouseItem.pressHoldTick >= 0) {
 							curMouseItem.pressHoldTick = -1;
 							
-							curMouseItem.onRelease();
+							curMouseItem.onRelease(curMouseItem.pressHoldTick);
 						}
 					}
 				}
