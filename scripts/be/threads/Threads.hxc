@@ -1,0 +1,344 @@
+// NOTE: currently broken!! sometimes drops references to `data` and `future`
+
+package be.threads;
+
+import lime.app.Future;
+
+import flixel.FlxG;
+
+import funkin.modding.module.ScriptedModule;
+import funkin.play.PlayState;
+
+typedef ThreadData = {
+	/**
+	 * The associated future with the thread.
+	 */
+	future:Future,
+	
+	/**
+	 * Arbitrary data to share with the main thread for callbacks.
+	 */
+	data:Dynamic,
+	
+	/**
+	 * The function to run in the thread.
+	 * 
+	 * @param data The thread data.
+	 */
+	work:(ThreadData)->Void,
+	
+	/**
+	 * Current arbitrary progress value.
+	 */
+	progress:Int,
+	
+	/**
+	 * Total arbitrary progress value.
+	 */
+	total:Int,
+	
+	/**
+	 * Prematurely "end" the thread with an error and trigger the `onError` callback.
+	 * The thread will still run, but will be removed from the active list and marked as panicking.
+	 * 
+	 * @param result The error value.
+	 * @return The thread data.
+	 */
+	error:(Dynamic)->ThreadData,
+	
+	/**
+	 * Prematurely "end" the thread with a result and trigger the `onComplete` callback.
+	 * The thread will still run, but will be removed from the active list.
+	 * 
+	 * @param result The result value.
+	 * @return The thread data.
+	 */
+	complete:(Dynamic)->ThreadData,
+	
+	/**
+	 * Update arbitrary progress values and trigger the `onProgress` callback.
+	 * 
+	 * @param progress The progress value. Defaults to `0`.
+	 * @param total The total value. Defaults to `progress` and cannot be less than `progress`.
+	 * @return The thread data.
+	 */
+	progress:(Null<Int>, Null<Int>)->ThreadData,
+	
+	/**
+	 * Callback for when the thread errors.
+	 * 
+	 * @param data The thread data.
+	 * @param err The error value, if any.
+	 */
+	onError:(ThreadData, Dynamic)->Void,
+	
+	/**
+	 * Arbitrary progress callback you can invoke via `data.progress(progress:Int, total:Int)`.
+	 * 
+	 * @param data The thread data.
+	 * @param result The result value, if any.
+	 */
+	onProgress:(ThreadData, Dynamic)->Void,
+	
+	/**
+	 * Callback for when the thread completes.
+	 * 
+	 * @param data The thread data.
+	 * @param progress The progress value. Defaults to `0`.
+	 * @param total The total value. Defaults to `progress` and cannot be less than `progress`.
+	 */
+	onComplete:(ThreadData, Int, Int)->Void,
+	
+	/**
+	 * Whether the thread is panicking.
+	 * Check against this often near unsafe code and return if `true`.
+	 */
+	panic:Bool
+}
+
+/**
+ * Data for creating a thread.
+ */
+typedef ThreadParams = {
+	/**
+	 * Arbitrary data to share with the thread.
+	 */
+	data:Dynamic,
+	
+	/**
+	 * Optional "total" value for the progress callback.
+	 */
+	total:Null<Int>,
+	
+	/**
+	 * Callback for when the thread errors.
+	 * 
+	 * @param data The thread data.
+	 * @param err The error value, if any.
+	 */
+	onError:(ThreadData, Dynamic)->Void,
+	
+	/**
+	 * Arbitrary progress callback you can invoke via `data.progress(progress:Int, total:Int)`.
+	 * 
+	 * @param data The thread data.
+	 * @param result The result value, if any.
+	 */
+	onProgress:(ThreadData, Dynamic)->Void,
+	
+	/**
+	 * Callback for when the thread completes.
+	 * 
+	 * @param data The thread data.
+	 * @param progress The progress value. Defaults to `0`.
+	 * @param total The total value. Defaults to `progress` and cannot be less than `progress`.
+	 */
+	onComplete:(ThreadData, Int, Int)->Void
+}
+
+/**
+ * Multi-threading helper module.
+ * 
+ * Warning: This module is not thread-safe, ESPECIALLY when the code involves anything script-related.
+ * Try not to initiate a reload while any `Future`s are still running.
+ * 
+ * Example:
+ * ```haxe
+ * package exampleMod;
+ * 
+ * import funkin.modding.module.ModuleHandler;
+ * import funkin.modding.module.ScriptedModule;
+ * 
+ * class ThreadExample extends ScriptedModule {
+ *     override public function new() {
+ *         super("exampleMod.ThreadExample");
+ *     }
+ *     
+ *     override public function onCreate(event:ScriptEvent):Void {
+ *         ModuleHandler.getModule("be.threads.Threads").scriptCall("queueAsync", [
+ *             function(data:Dynamic):Void {
+ *                 var exampleVar:Int = 0;
+ *                 
+ *                 // do some work
+ *                 for (i in 0...data.total) {
+ *                     exampleVar += i * 10;
+ *                     data.progress(i + 1);
+ *                 }
+ *                 
+ *                 // for safety, check for panic whenever using code outside of this function	
+ *                 if (!data.panic) {
+ *                     ModuleHandler.getModule("exampleMod.ExampleModule").scriptCall("exampleFunction1", [data]);
+ *                     data.complete(exampleVar);
+ *                 }
+ *             },
+ *             
+ *             {
+ *                 data: {
+ *                     exampleData: "12345"
+ *                 },
+ *                 
+ *                 total: 8,
+ *                 
+ *                 onProgress: function(data:Dynamic, progress:Int, total:Int):Void {
+ *                     trace("exampleMod: Progress: " + progress + "/" + total);
+ *                 },
+ *                 
+ *                 onComplete: function(data:Dynamic, result:Dynamic):Void {
+ *                    trace("exampleMod: Thread example result: " + Std.string(result));
+ *                 }
+ *             }
+ *         ]);
+ *     }
+ * }
+ * ```
+ */
+class Threads extends ScriptedModule {
+	override public function new() {
+		super("be.threads.Threads", -2147483648);
+	}
+	
+	/**
+	 * All active threads.
+	 */
+	private var active:Array<ThreadData> = new Array();
+	
+	/**
+	 * Runs a function in a separate thread.
+	 * 
+	 * Try to avoid interacting with other scripts as much as possible.
+	 * If you really have to, check against `data.panic` often.
+	 * 
+	 * @param work The function to run in the thread.
+	 * @param params The data for the new thread.
+	 * @return The thread data object, or `null` if no work was provided.
+	 */
+	public function queueAsync(work:(ThreadData)->Void, params:ThreadParams):Null<ThreadData> {
+		if (work == null || params == null) {
+			return null;
+		}
+		
+		var data:ThreadData = {
+			future: null,
+			data: params.data == null ? {} : params.data,
+			
+			work: work,
+			
+			progress: 0,
+			total: params.total == null ? 0 : Std.int(Math.max(0, params.total)),
+			
+			onError: params.onError == null ? function(data:ThreadData):Void {} : params.onError,
+			onProgress: params.onProgress == null ? function(data:ThreadData):Void {} : params.onProgress,
+			onComplete: params.onComplete == null ? function(data:ThreadData):Void {} : params.onComplete,
+			
+			panic: false
+		};
+		
+		active.push(data);
+		
+		data.error = function(result:Dynamic):ThreadData {
+			// copied from `lime.app.Promise.error`
+			var future:Future = data.future;
+			if (future != null && !future.isComplete) {
+				future.isError = true;
+				future.error = result;
+				if (future.__errorListeners != null) {
+					for (listener in future.__errorListeners) {
+						listener(result);
+					}
+					
+					future.__errorListeners = null;
+				}
+			}
+			
+			data.panic = true;
+		};
+		
+		data.complete = function(result:Dynamic):ThreadData {
+			// copied from `lime.app.Promise.complete`
+			var future:Future = data.future;
+			if (future != null && !future.isError) {
+				future.isComplete = true;
+				future.value = data;
+				if (future.__completeListeners != null) {
+					for (listener in future.__completeListeners) {
+						listener(data);
+					}
+					
+					future.__completeListeners = null;
+				}
+			}
+			
+			return data;
+		};
+		
+		data.progress = function(?progress:Int, ?total:Int):ThreadData {
+			progress = Std.int(Math.max(0, progress == null ? 0 : progress));
+			
+			if (total == null) {
+				total = data.total == null ? 0 : data.total;
+			}
+			
+			data.total = Std.int(Math.max(progress, total));
+			
+			// copied from `lime.app.Promise.progress`
+			var future:Future = data.future;
+			if (future != null && !future.isError && !future.isComplete) {
+				if (future.__progressListeners != null) {
+					for (listener in future.__progressListeners) {
+						listener(progress, data.total);
+					}
+				}
+			}
+			
+			return data;
+		};
+		
+		data.future = new Future(function():Dynamic {
+			data.work(data);
+			
+			return true;
+		}, true);
+		
+		data.future.onError(function(err:Dynamic):Void {
+			active.remove(data);
+			
+			data.panic = true;
+			
+			data.onError(data, err);
+		});
+		
+		data.future.onComplete(function(result:Dynamic):Void {
+			active.remove(data);
+			
+			data.onComplete(data, result);
+		});
+		
+		data.future.onProgress(function(progress:Int, total:Int):Void {
+			data.onProgress(data, progress, total);
+		});
+		
+		return data;
+	}
+	
+	private var pressedReload:Bool = false;
+	override public function onUpdate(event:UpdateScriptEvent):Void {
+		pressedReload = FlxG.keys.justPressed.F5;
+	}
+	
+	override public function onDestroy(event:ScriptEvent):Void {
+		checkPanic();
+	}
+	
+	private function checkPanic():Void {
+		if (
+			(PlayState.instance != null && PlayState.instance.criticalFailure) ||
+			(!FlxG.keys.justPressed.F5 && !pressedReload)
+		) {
+			return;
+		}
+		
+		while (active.length > 0) {
+			active.pop().error("panicking");
+		}
+	}
+}

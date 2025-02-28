@@ -20,7 +20,7 @@ import funkin.util.ReflectUtil;
  * Song utility module.
  */
 class SongUtil extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.util.SongUtil", -2147483648);
 	}
 	

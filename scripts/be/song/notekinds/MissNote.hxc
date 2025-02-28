@@ -18,7 +18,7 @@ import funkin.play.notes.notekind.ScriptedNoteKind;
  * - goTransparent: Whether to make the note transparent like when a combo breaks.
  */
 class MissNote extends ScriptedNoteKind {
-	public function new() {
+	override public function new() {
 		super("be.song.notekinds.MissNote", "Miss Note");
 	}
 	

@@ -132,7 +132,7 @@ typedef SongCallbacks = {
  * import funkin.play.stage.ScriptedStage;
  * 
  * class ExampleStage extends ScriptedStage {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.ExampleStage");
  *     }
  *     
@@ -173,7 +173,7 @@ typedef SongCallbacks = {
  * import funkin.play.song.ScriptedSong;
  * 
  * class ExampleSong extends ScriptedSong {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.ExampleSong");
  *     }
  *     
@@ -244,7 +244,7 @@ typedef SongCallbacks = {
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleSongHandler extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.song.ExampleSongHandler");
  *     }
  *     
@@ -310,7 +310,7 @@ typedef SongCallbacks = {
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleHUD extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.song.ExampleHUD");
  *     }
  *     
@@ -365,7 +365,7 @@ typedef SongCallbacks = {
  * ```
  */
 class SongHelper extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.song.SongHelper", -2147483648);
 	}
 	

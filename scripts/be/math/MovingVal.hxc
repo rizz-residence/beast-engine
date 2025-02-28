@@ -225,7 +225,7 @@ typedef MovingValData = {
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleModule extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.ExampleModule");
  *     }
  *     
@@ -265,7 +265,7 @@ typedef MovingValData = {
  * ```
  */
 class MovingVal extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.math.MovingVal", -2147483647);
 	}
 	

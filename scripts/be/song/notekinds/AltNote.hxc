@@ -8,7 +8,7 @@ import funkin.play.notes.notekind.ScriptedNoteKind;
  * A note kind that plays the sing animation with the "alt" suffix.
  */
 class AltNote extends ScriptedNoteKind {
-	public function new() {
+	override public function new() {
 		super("be.song.notekinds.AltNote", "Alt Animation");
 	}
 	

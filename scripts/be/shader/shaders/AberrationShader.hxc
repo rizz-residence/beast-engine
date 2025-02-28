@@ -9,7 +9,7 @@ import funkin.modding.base.ScriptedFlxRuntimeShader;
  * Primarily intended for chromatic aberration.
  */
 class AberrationShader extends ScriptedFlxRuntimeShader {
-	public function new() {
+	override public function new() {
 		super(Assets.getText(Paths.frag("beast-engine/aberration")));
 		
 		set_offsetR(offsetR);

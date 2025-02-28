@@ -144,7 +144,7 @@ typedef MenuItemObj = {
 /**
  * Data for creating a `MenuItemObj` object.
  */
-typedef MenuItemData = {
+typedef MenuItemParams = {
 	/**
 	 * Arbitrary custom data attached to the menu item.
 	 */
@@ -276,7 +276,7 @@ typedef MenuItemData = {
  * - `be.menu.Menu`
  */
 class MenuItem extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.menu.MenuItem", -2147483648);
 	}
 	
@@ -289,7 +289,7 @@ class MenuItem extends ScriptedModule {
 	 * 
 	 * @param data The data for the menu item.
 	 */
-	public function new_MenuItem(?data:MenuItemData):MenuItemObj {
+	public function new_MenuItem(?data:MenuItemParams):MenuItemObj {
 		if (data == null) {
 			data = {};
 		}

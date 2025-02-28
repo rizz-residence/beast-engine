@@ -8,7 +8,7 @@ import funkin.modding.base.ScriptedFlxRuntimeShader;
  * A shader for creating a noise effect.
  */
 class NoiseShader extends ScriptedFlxRuntimeShader {
-	public function new() {
+	override public function new() {
 		super(Assets.getText(Paths.frag("beast-engine/noise")));
 		
 		set_size(size);

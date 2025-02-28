@@ -214,7 +214,7 @@ typedef MenuObj = {
 /**
  * Data for creating a `MenuObj` object.
  */
-typedef MenuData = {
+typedef MenuParams = {
 	/**
 	 * Arbitrary custom data attached to the menu.
 	 */
@@ -383,7 +383,7 @@ typedef MenuData = {
  * }
  * 
  * class ExampleMenu extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.states.ExampleMenuState.ExampleMenu");
  *     }
  *     
@@ -563,7 +563,7 @@ typedef MenuData = {
  * ```
  */
 class Menu extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.menu.Menu", -2147483647);
 	}
 	
@@ -572,10 +572,10 @@ class Menu extends ScriptedModule {
 	 * 
 	 * Make sure the total number of items is equal to `sizeX * sizeY`!
 	 * 
-	 * @param data The `MenuData` to initialize the menu with.
+	 * @param data The `MenuParams` to initialize the menu with.
 	 * @return The new `MenuObj` object.
 	 */
-	public function new_Menu(?data:MenuData):MenuObj {
+	public function new_Menu(?data:MenuParams):MenuObj {
 		if (data == null) {
 			data = {};
 		}

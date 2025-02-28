@@ -8,7 +8,7 @@ import funkin.modding.base.ScriptedFlxRuntimeShader;
  * A shader for creating a vignette effect.
  */
 class VignetteShader extends ScriptedFlxRuntimeShader {
-	public function new() {
+	override public function new() {
 		super(Assets.getText(Paths.frag("beast-engine/vignette")));
 		
 		set_radiusMin(radiusMin);

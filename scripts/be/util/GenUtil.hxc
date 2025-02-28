@@ -33,7 +33,7 @@ typedef RandomCallbackData = {
  * General utility module.
  */
 class GenUtil extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.util.GenUtil", -2147483648);
 	}
 	
@@ -46,20 +46,21 @@ class GenUtil extends ScriptedModule {
 	 * Unfortunately, it's not perfect, since the catch value isn't accessible, but it's better than nothing...
 	 * 
 	 * @param func The function to try.
-	 * @param caught The function to run if the try block fails.
+	 * @param caught Optional function to run if the try block fails.
 	 */
 	public function tryBlock(func:()->Void, ?caught:()->Void):Void {
 		var block:()->Null<Bool> = function():Null<Bool> {
-			var success:Bool = true;
-			
 			try {
 				func();
-			} catch (e:Dynamic) {}
+			} catch (e:Dynamic) {
+				return false;
+			}
 			
-			return success;
+			return true;
 		};
 		
-		if (block() != true && caught != null) {
+		var result:Null<Bool> = block();
+		if (result != true && caught != null) {
 			caught();
 		}
 	}

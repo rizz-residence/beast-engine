@@ -57,7 +57,7 @@ typedef OnFileCached = (String, Float, Float)->Void
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleAssetLists extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("example.ExampleAssetLists", 0);
  *     }
  *     
@@ -116,7 +116,7 @@ typedef OnFileCached = (String, Float, Float)->Void
  * - `be.assets.Assets`
  */
 class AssetLists extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.assets.AssetLists", -2147483646);
 	}
 	
@@ -144,7 +144,7 @@ class AssetLists extends ScriptedModule {
 	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
 	 * @param onFileCached Called when each asset finishes caching in the async thread.
 	 * @param onComplete Called when all assets are cached.
-	 * @return The `Future` promise object.
+	 * @return Whether the thread was created successfully or not.
 	 */
 	public function cacheListAsync(
 		id:String,
@@ -152,7 +152,7 @@ class AssetLists extends ScriptedModule {
 		persistent:Bool = false,
 		?onFileCached:OnFileCached,
 		?onComplete:()->Void
-	):Null<Future> {
+	):Bool {
 		return ModuleHandler.getModule("be.assets.Assets").scriptCall("cacheAssetsAsync", [lists.get(id), forPlayState, persistent, onFileCached, onComplete]);
 	}
 	

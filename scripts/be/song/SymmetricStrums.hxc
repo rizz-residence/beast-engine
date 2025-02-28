@@ -15,7 +15,7 @@ import funkin.util.Constants;
  * - `be.song.SongHelper`
  */
 class SymmetricStrums extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.song.SymmetricStrums", -2147483647);
 	}
 	

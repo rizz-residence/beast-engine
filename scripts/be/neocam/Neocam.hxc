@@ -292,7 +292,7 @@ typedef NeocamData = {
  * ```
  */
 class Neocam extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.neocam.Neocam", -2147483646);
 	}
 	

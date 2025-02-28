@@ -104,7 +104,7 @@ typedef OnFileCached = (String, Float, Float)->Void
  * - `be.assets.AssetLists`
  */
 class Assets extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.assets.Assets", -2147483647);
 	}
 	
@@ -211,18 +211,18 @@ class Assets extends ScriptedModule {
 	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
 	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
 	 * @param onFileCached Called when each asset finishes caching in the async thread.
-	 * @param onComplete Called when all assets are cached.
-	 * @return The `Future` promise object.
+	 * @param onComplete Called when all assets are cached, with one argument for whether the operation was successful or not.
+	 * @return Whether the thread was created successfully or not.
 	 */
 	public function cacheAssetsAsync(
 		params:AssetParams,
 		forPlayState:Bool = false,
 		persistent:Bool = false,
 		?onFileCached:OnFileCached,
-		?onComplete:()->Void
-	):Null<Future> {
+		?onComplete:(Bool)->Void
+	):Bool {
 		if (!Types.isAnonymousObject(params)) {
-			return null;
+			return false;
 		}
 		
 		var asyncParams:AssetParams = {
@@ -230,71 +230,104 @@ class Assets extends ScriptedModule {
 			sounds: new Array(),
 			music: new Array(),
 			json: new Array(),
-			text: new Array()
+			text: new Array(),
+			
+			// just for `onFileCached`
+			all: new Array()
 		};
 		
-		var assetCount:Float = 0;
+		var assetCount:Int = 0;
 		for (type in ["images", "sounds", "music", "json", "text"]) {
 			if (ReflectUtil.hasAnonymousField(params, type) && Std.isOfType(ReflectUtil.getAnonymousField(params, type), Array)) {
 				for (path in ReflectUtil.getAnonymousField(params, type)) {
 					ReflectUtil.getAnonymousField(asyncParams, type).push(path);
+					asyncParams.all.push(path);
 					assetCount++;
 				}
 			}
 		}
 		
 		if (onComplete == null) {
-			onComplete = function():Void {};
+			onComplete = function(success:Bool):Void {};
 		}
 		
 		if (assetCount == 0) {
-			onComplete();
-			return null;
+			onComplete(false);
+			return false;
 		}
 		
-		var onFileCached_persist:OnFileCached = null;
-		if (onFileCached == null) {
-			onFileCached_persist = function(path:String, percentDone:Float, dt:Float):Void {};
-		} else {
-			onFileCached_persist = onFileCached;
-		}
-		
-		var onComplete_persist:()->Void = onComplete;
-		
-		var future:Future = new Future(function():Bool {
-			var cachedCount:Float = 0;
-			var dt:Float = 0;
-			for (type in ["images", "sounds", "music", "json", "text"]) {
-				for (path in ReflectUtil.getAnonymousField(asyncParams, type)) {
-					dt = Timer.stamp();
-					getAsset(type, path, false);
-					dt = Timer.stamp() - dt;
-					cachedCount++;
-					onFileCached_persist(path, cachedCount / assetCount, dt);
+		var threadCreated:Bool = ModuleHandler.getModule("be.threads.Threads").scriptCall("queueAsync", [
+			function(data:Dynamic):Void {
+				var cachedCount:Float = 0;
+				for (type in ["images", "sounds", "music", "json", "text"]) {
+					for (path in ReflectUtil.getAnonymousField(data.data.params, type)) {
+						if (data.panic) {
+							return;
+						}
+						
+						data.data.dt = Timer.stamp();
+						
+						getAsset(type, path, false);
+						
+						if (data.panic) {
+							return;
+						}
+						
+						data.data.dt = Timer.stamp() - data.data.dt;
+						
+						cachedCount++;
+						data.progress(cachedCount);
+					}
+				}
+			},
+			
+			{
+				data: {
+					params: asyncParams,
+					
+					forPlayState: forPlayState,
+					persistent: persistent,
+					
+					onFileCached: onFileCached == null ? function(path:String, percentDone:Float, dt:Float):Void {} : onFileCached,
+					onComplete: onComplete,
+					
+					dt: 0
+				},
+				
+				total: assetCount,
+				
+				onError: function(data:Dynamic, err:Dynamic):Void {
+					data.data.onComplete(false);
+				},
+				
+				onProgress: function(data:Dynamic, ?progress:Int, ?total:Int):Void {
+					if (data.panic) {
+						return;
+					}
+					
+					data.data.onFileCached(data.data.params.all[progress], progress / total, data.data.dt);
+				},
+				
+				onComplete: function(data:Dynamic, result:Dynamic):Void {
+					if (!data.panic) {
+						for (path in data.data.params.images) {
+							var key:String = Paths.image(path);
+							if (data.data.persistent && !persistentKeys.contains(key)) {
+								persistentKeys.push(key);
+							} else if (data.data.forPlayState && !playStateKeys.contains(key)) {
+								playStateKeys.push(key);
+							}
+						}
+					}
+					
+					clearDuplicates();
+					
+					data.data.onComplete(!data.panic);
 				}
 			}
-			
-			return true;
-		}, true);
+		]);
 		
-		var persistent_persist:Bool = persistent;
-		var forPlayState_persist:Bool = forPlayState;
-		future.onComplete(function(_:Dynamic):Void {
-			for (path in asyncParams.images) {
-				var key:String = Paths.image(path);
-				if (persistent_persist && !persistentKeys.contains(key)) {
-					persistentKeys.push(key);
-				} else if (forPlayState_persist && !persistentKeys.contains(key)) {
-					playStateKeys.push(key);
-				}
-			}
-			
-			clearDuplicates();
-			
-			onComplete_persist();
-		});
-		
-		return future;
+		return threadCreated;
 	}
 	
 	/**
