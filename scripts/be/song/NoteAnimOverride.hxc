@@ -22,7 +22,7 @@ typedef ExclusionData = {
  * import funkin.play.notes.notekind.ScriptedNoteKind;
  * 
  * class ExampleNote extends ScriptedNoteKind {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.song.notekinds.ExampleNote", "Example Note");
  *     }
  *     
@@ -40,7 +40,7 @@ typedef ExclusionData = {
  * ```
  */
 class NoteAnimOverride extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.song.NoteAnimOverride", -2147483648);
 	}
 	

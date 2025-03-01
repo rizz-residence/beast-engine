@@ -6,11 +6,9 @@ import funkin.modding.module.ScriptedModule;
 
 /**
  * Globally fixes incorrect shader coordinates when the game is resized.
- * 
- * Credit to @Raltyro for the original code.
  */
 class ShaderCoordFix extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.shader.Fixes.ShaderCoordFix", -2147483648);
 	}
 	

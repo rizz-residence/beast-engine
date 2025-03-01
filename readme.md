@@ -10,8 +10,11 @@ If any mods you'd like to use require it, just drag `beast-engine.zip` into your
 You can find the releases [here](https://github.com/rizz-residence/beast-engine/releases).
 This repo is open to contribution!
 
+The `dev` branch version is suffixed with `-dev` as it may be unstable and/or contain breaking changes until the next release.
+
 ## Features
 
+- `be.assets` - Asset caching helper package.
 - `be.math` - Useful math-related stuff.
 - `be.menu` - A custom menu helper package.
 - `be.neocam` - A versatile camera controller.
@@ -20,6 +23,7 @@ This repo is open to contribution!
 - `be.sequence` - Timed sequence of events.
 - `be.shader` - A collection of shaders and shader fixes.
 - `be.song` - Note kinds and song-related utilities and song fixes.
+- `be.threads` - A multithreading helper.
 - `be.util` - Many useful functions for modding.
 
 See code for documentation.

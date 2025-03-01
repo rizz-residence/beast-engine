@@ -33,7 +33,7 @@ typedef RandomCallbackData = {
  * General utility module.
  */
 class GenUtil extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.util.GenUtil", -2147483648);
 	}
 	
@@ -46,20 +46,21 @@ class GenUtil extends ScriptedModule {
 	 * Unfortunately, it's not perfect, since the catch value isn't accessible, but it's better than nothing...
 	 * 
 	 * @param func The function to try.
-	 * @param caught The function to run if the try block fails.
+	 * @param caught Optional function to run if the try block fails.
 	 */
 	public function tryBlock(func:()->Void, ?caught:()->Void):Void {
 		var block:()->Null<Bool> = function():Null<Bool> {
-			var success:Bool = true;
-			
 			try {
 				func();
-			} catch (e:Dynamic) {}
+			} catch (e:Dynamic) {
+				return false;
+			}
 			
-			return success;
+			return true;
 		};
 		
-		if (block() != true && caught != null) {
+		var result:Null<Bool> = block();
+		if (result != true && caught != null) {
 			caught();
 		}
 	}
@@ -70,23 +71,33 @@ class GenUtil extends ScriptedModule {
 	 * @param a The base object.
 	 * @param b The object to merge into the base object, overwriting any conflicting keys.
 	 * @param exclusive If `true`, only keys in the base object will be kept. Otherwise, merging is additive.
+	 * @param deep If `true`, will merge nested objects as well.
 	 * @return A new object with the merged values.
 	 */
-	public function objectMerge(a:Dynamic, b:Dynamic, exclusive:Bool = false):Dynamic {
+	public function objectMerge(a:Dynamic, b:Dynamic, exclusive:Bool = false, deep:Bool = true):Dynamic {
 		var ret:Dynamic = Objects.clone(a);
+		var stack:Array<Dynamic> = new Array();
+		stack.push({a: a, b: b, ret: ret});
 		
-		for (path in objectPaths(exclusive ? a : b)) {
-			var aVal:Dynamic = Objects.getPath(a, path);
-			var bVal:Dynamic = Objects.getPath(b, path);
+		while (stack.length > 0) {
+			var obj:Dynamic = stack.pop();
+			var aObj:Dynamic = obj.a;
+			var bObj:Dynamic = obj.b;
+			var retObj:Dynamic = obj.ret;
 			
-			if (bVal == null) {
-				continue;
-			}
-			
-			if (Types.isAnonymousObject(aVal) && Types.isAnonymousObject(bVal)) {
-				Objects.setPath(ret, path, objectMerge(aVal, bVal, exclusive));
-			} else {
-				Objects.setPath(ret, path, bVal);
+			for (key in ReflectUtil.getAnonymousFieldsOf(exclusive ? aObj : bObj)) {
+				var bVal:Dynamic = ReflectUtil.getAnonymousField(bObj, key);
+				if (bVal == null) {
+					continue;
+				}
+				
+				var aVal:Dynamic = ReflectUtil.getAnonymousField(aObj, key);
+				if (deep && Types.isAnonymousObject(aVal) && Types.isAnonymousObject(bVal)) {
+					ReflectUtil.setAnonymousField(retObj, key, Objects.clone(aVal));
+					stack.push({a: aVal, b: bVal, ret: ReflectUtil.getAnonymousField(retObj, key)});
+				} else {
+					ReflectUtil.setAnonymousField(retObj, key, bVal);
+				}
 			}
 		}
 		
@@ -94,21 +105,39 @@ class GenUtil extends ScriptedModule {
 	}
 	
 	/**
+	 * Clones an anonymous object.
+	 * 
+	 * @param obj The object to clone.
+	 * @param deep If `true`, will clone nested objects as well.
+	 * @return A new object with the same values as `obj`.
+	 */
+	public function objectClone(obj:Dynamic, deep:Bool = true):Dynamic {
+		return objectMerge(obj, {}, false, deep);
+	}
+	
+	/**
 	 * Gets all paths of an anonymous object.
 	 * 
 	 * @param obj The object to get paths from.
+	 * @param deep If `true`, will get paths of nested objects as well.
 	 * @return An array of paths.
 	 */
-	public function objectPaths(obj:Dynamic):Array<String> {
+	public function objectPaths(obj:Dynamic, deep:Bool = true):Array<String> {
 		var ret:Array<String> = new Array();
+		var stack:Array<Dynamic> = new Array();
+		stack.push({obj: obj, path: ""});
 		
-		for (key in ReflectUtil.getAnonymousFieldsOf(obj)) {
-			ret.push(key);
+		while (stack.length > 0) {
+			var objData:Dynamic = stack.pop();
+			var obj:Dynamic = objData.obj;
+			var path:String = objData.path;
 			
-			var val:Dynamic = Objects.getPath(obj, key);
-			if (Types.isAnonymousObject(val)) {
-				for (subkey in objectPaths(val)) {
-					ret.push(key + "." + subkey);
+			for (key in ReflectUtil.getAnonymousFieldsOf(obj)) {
+				var val:Dynamic = ReflectUtil.getAnonymousField(obj, key);
+				if (deep && Types.isAnonymousObject(val)) {
+					stack.push({obj: val, path: path + key + "."});
+				} else {
+					ret.push(path + key);
 				}
 			}
 		}

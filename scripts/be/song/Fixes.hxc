@@ -12,7 +12,7 @@ import funkin.play.PlayState;
  * - `be.song.SongHelper`
  */
 class SingleVocalsFix extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.song.Fixes.SingleVocalsFix", -2147483647);
 	}
 	

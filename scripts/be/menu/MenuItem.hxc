@@ -1,6 +1,6 @@
 package be.menu;
 
-import flixel.FlxBasic;
+import flixel.FlxObject;
 
 import funkin.modding.module.ScriptedModule;
 
@@ -21,13 +21,13 @@ typedef MenuItemObj = {
 	/**
 	 * Arbitrary related container object.
 	 */
-	container:Null<FlxBasic>,
+	container:Null<FlxObject>,
 	
 	/**
 	 * The hitbox of the item. Only used for mouse-based items.
 	 * Uses `container` if `null`.
 	 */
-	hitbox:Null<FlxBasic>,
+	hitbox:Null<FlxObject>,
 	
 	/**
 	 * Whether the item can be interacted with.
@@ -94,15 +94,25 @@ typedef MenuItemObj = {
 	 * Called when directional input is pressed. Only used for keyboard-based items.
 	 * 
 	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 * @param holdTime A list of the time in seconds since each direction was pressed, in order of left/down/up/right. A value of -1 means not pressed.
 	 */
-	onDirectionPress:Null<(Array<Bool>)->Void>,
+	onDirectionPress:Null<(Array<Bool>, Array<Float>)->Void>,
+	
+	/**
+	 * Called when directional input is pressed from hold navigation. Only used for keyboard-based items.
+	 * 
+	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 * @param holdTime A list of the time in seconds since each direction was pressed, in order of left/down/up/right. A value of -1 means not pressed.
+	 */
+	onDirectionHold:Null<(Array<Bool>, Array<Float>)->Void>,
 	
 	/**
 	 * Called when directional input is released. Only used for keyboard-based items.
 	 * 
 	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 * @param holdTime A list of the time in seconds since each direction was pressed, in order of left/down/up/right. A value of -1 means not pressed.
 	 */
-	onDirectionRelease:Null<(Array<Bool>)->Void>,
+	onDirectionRelease:Null<(Array<Bool>, Array<Float>)->Void>,
 	
 	/**
 	 * Called when the item is pressed.
@@ -110,9 +120,18 @@ typedef MenuItemObj = {
 	onPress:Null<()->Void>,
 	
 	/**
-	 * Called when input is released after pressing the item.
+	 * Called on an interval when the item is held down after the initial press.
+	 * 
+	 * @param holdTime The time in seconds since the item was pressed.
 	 */
-	onRelease:Null<()->Void>,
+	onHold:Null<(Float)->Void>,
+	
+	/**
+	 * Called when input is released after pressing the item.
+	 * 
+	 * @param holdTime The time in seconds since the item was pressed.
+	 */
+	onRelease:Null<(Float)->Void>,
 	
 	/**
 	 * Called every frame.
@@ -125,7 +144,7 @@ typedef MenuItemObj = {
 /**
  * Data for creating a `MenuItemObj` object.
  */
-typedef MenuItemData = {
+typedef MenuItemParams = {
 	/**
 	 * Arbitrary custom data attached to the menu item.
 	 */
@@ -139,13 +158,13 @@ typedef MenuItemData = {
 	/**
 	 * Arbitrary related container object.
 	 */
-	container:Null<FlxBasic>,
+	container:Null<FlxObject>,
 	
 	/**
 	 * The hitbox of the item. Only used for mouse-based items.
 	 * Uses `container` if `null`.
 	 */
-	hitbox:Null<FlxBasic>,
+	hitbox:Null<FlxObject>,
 	
 	/**
 	 * Whether the item can be interacted with.
@@ -203,37 +222,44 @@ typedef MenuItemData = {
 	 * Called when directional input is pressed. Only used for keyboard-based items.
 	 * 
 	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 * @param holdTime A list of the time in seconds since each direction was pressed, in order of left/down/up/right. A value of -1 means not pressed.
 	 */
-	onDirectionPress:Null<(Array<Bool>)->Void>,
+	onDirectionPress:Null<(Array<Bool>, Array<Float>)->Void>,
 	
 	/**
 	 * Called when directional input is pressed from hold navigation. Only used for keyboard-based items.
 	 * 
 	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 * @param holdTime A list of the time in seconds since each direction was pressed, in order of left/down/up/right. A value of -1 means not pressed.
 	 */
-	onDirectionHold:Null<(Array<Bool>)->Void>,
+	onDirectionHold:Null<(Array<Bool>, Array<Float>)->Void>,
 	
 	/**
 	 * Called when directional input is released. Only used for keyboard-based items.
 	 * 
 	 * @param directions A list of directional inputs that satisfy the above condition, in order of left/down/up/right.
+	 * @param holdTime A list of the time in seconds since each direction was pressed, in order of left/down/up/right. A value of -1 means not pressed.
 	 */
-	onDirectionRelease:Null<(Array<Bool>)->Void>,
+	onDirectionRelease:Null<(Array<Bool>, Array<Float>)->Void>,
 	
 	/**
-	 * Called when the item is pressed.
+	 * Called when the item is pressed, either with the `ACCEPT` keybind for keyboard-based items or with the mouse for mouse-based items.
 	 */
 	onPress:Null<()->Void>,
 	
 	/**
-	 * Called when the item is held down.
+	 * Called on an interval when the item is held down after the initial press.
+	 * 
+	 * @param holdTime The time in seconds since the item was pressed.
 	 */
-	onHold:Null<()->Void>,
+	onHold:Null<(Float)->Void>,
 	
 	/**
 	 * Called when input is released after pressing the item.
+	 * 
+	 * @param holdTime The time in seconds since the item was pressed.
 	 */
-	onRelease:Null<()->Void>,
+	onRelease:Null<(Float)->Void>,
 	
 	/**
 	 * Called every frame.
@@ -250,7 +276,7 @@ typedef MenuItemData = {
  * - `be.menu.Menu`
  */
 class MenuItem extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.menu.MenuItem", -2147483648);
 	}
 	
@@ -263,7 +289,7 @@ class MenuItem extends ScriptedModule {
 	 * 
 	 * @param data The data for the menu item.
 	 */
-	public function new_MenuItem(?data:MenuItemData):MenuItemObj {
+	public function new_MenuItem(?data:MenuItemParams):MenuItemObj {
 		if (data == null) {
 			data = {};
 		}
@@ -289,14 +315,14 @@ class MenuItem extends ScriptedModule {
 			onFocus: data.onFocus == null ? function(prev:Null<Dynamic>):Void {} : data.onFocus,
 			onUnfocus: data.onUnfocus == null ? function(next:Dynamic):Void {} : data.onUnfocus,
 			
-			onDirectionPress: data.onDirectionPress == null ? function(directions:Array<Bool>):Void {} : data.onDirectionPress,
-			onDirectionHold: data.onDirectionHold == null ? function(directions:Array<Bool>):Void {} : data.onDirectionHold,
-			onDirectionRelease: data.onDirectionRelease == null ? function(directions:Array<Bool>):Void {} : data.onDirectionRelease,
-				
+			onDirectionPress: data.onDirectionPress == null ? function(directions:Array<Bool>, holdTime:Array<Float>):Void {} : data.onDirectionPress,
+			onDirectionHold: data.onDirectionHold == null ? function(directions:Array<Bool>, holdTime:Array<Float>):Void {} : data.onDirectionHold,
+			onDirectionRelease: data.onDirectionRelease == null ? function(directions:Array<Bool>, holdTime:Array<Float>):Void {} : data.onDirectionRelease,
+			
 			onPress: data.onPress == null ? function():Void {} : data.onPress,
-			onHold: data.onHold == null ? function():Void {} : data.onHold,
-			onRelease: data.onRelease == null ? function():Void {} : data.onRelease,
-				
+			onHold: data.onHold == null ? function(holdTime:Float):Void {} : data.onHold,
+			onRelease: data.onRelease == null ? function(holdTime:Float):Void {} : data.onRelease,
+			
 			onUpdate: data.onUpdate == null ? function(elapsed:Float):Void {} : data.onUpdate
 		};
 		

@@ -21,7 +21,7 @@ void main() {
 	}
 	
 	vec4 noise = vec4(vec3(hash1o3i(vec3(
-		floor(openfl_TextureCoordv * openfl_TextureSize * u_size),
+		floor(openfl_TextureCoordv * openfl_TextureSize / u_size),
 		floor(u_time * u_fps) / u_fps
 	))), 1.0);
 	

@@ -8,7 +8,7 @@ import funkin.modding.base.ScriptedFlxRuntimeShader;
  * A shader for adjusting the saturation of the texture.
  */
 class SaturationShader extends ScriptedFlxRuntimeShader {
-	public function new() {
+	override public function new() {
 		super(Assets.getText(Paths.frag("beast-engine/saturation")));
 		
 		set_saturation(saturation);

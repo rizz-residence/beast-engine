@@ -12,6 +12,7 @@ import thx.Types;
 import flixel.FlxG;
 import flixel.FlxCamera;
 
+import funkin.Conductor;
 import funkin.modding.module.ModuleHandler;
 import funkin.modding.module.ScriptedModule;
 import funkin.play.PlayState;
@@ -131,7 +132,7 @@ typedef SongCallbacks = {
  * import funkin.play.stage.ScriptedStage;
  * 
  * class ExampleStage extends ScriptedStage {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.ExampleStage");
  *     }
  *     
@@ -172,7 +173,7 @@ typedef SongCallbacks = {
  * import funkin.play.song.ScriptedSong;
  * 
  * class ExampleSong extends ScriptedSong {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.ExampleSong");
  *     }
  *     
@@ -243,7 +244,7 @@ typedef SongCallbacks = {
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleSongHandler extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.song.ExampleSongHandler");
  *     }
  *     
@@ -309,7 +310,7 @@ typedef SongCallbacks = {
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleHUD extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.song.ExampleHUD");
  *     }
  *     
@@ -364,7 +365,7 @@ typedef SongCallbacks = {
  * ```
  */
 class SongHelper extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.song.SongHelper", -2147483648);
 	}
 	
@@ -398,6 +399,8 @@ class SongHelper extends ScriptedModule {
 	 * Call this function in your stage script to trigger the `stageReset` callbacks.
 	 */
 	public function onStageReset():Void {
+		setDefaultVars();
+		
 		doCallbackList(callbacks.stageReset);
 	}
 	
@@ -420,8 +423,11 @@ class SongHelper extends ScriptedModule {
 		hook();
 	}
 	
+	private var inPlayState:Bool = false;
+	
 	override public function onStateChangeEnd(event:StateChangeScriptEvent):Void {
 		if (Std.isOfType(event.targetState, PlayState)) {
+			inPlayState = true;
 			onPlayStateCreate();
 		} else {
 			reset();
@@ -430,13 +436,20 @@ class SongHelper extends ScriptedModule {
 	
 	override public function onSubStateOpenEnd(event:SubStateScriptEvent):Void {
 		if (Std.isOfType(event.targetState, PlayState) && !PlayState.instance.isMinimalMode) {
+			inPlayState = true;
 			onPlayStateCreate();
 		}
 	}
 	
+	override public function onSongStart(event:ScriptEvent):Void {
+		setDefaultVars();
+		
+		previousSongTime = Conductor.get_instance().songPosition;
+	}
+	
 	private var completedEvents:Array<Int> = new Array();
 	override public function onStepHit(event:SongTimeScriptEvent):Void {
-		if (PlayState.instance == null || PlayState.instance.isMinimalMode || events == null) {
+		if (PlayState.instance == null || PlayState.instance.isMinimalMode || !Std.isOfType(events, IntMap)) {
 			return;
 		}
 		
@@ -448,30 +461,73 @@ class SongHelper extends ScriptedModule {
 	}
 	
 	override public function onSongRetry(event:ScriptEvent):Void {
+		setDefaultVars();
+		
+		previousSongTime = null;
 		completedEvents.resize(0);
 	}
 	
 	override public function onSongEnd(event:ScriptEvent):Void {
-		doCallbackList(callbacks.closePersist);
-		doCallbackList(callbacks.close);
+		setDefaultVars();
+		
+		previousSongTime = null;
 	}
 	
 	private var pressedReload:Bool = false;
+	private var previousSongTime:Null<Float> = null;
 	override public function onUpdate(event:UpdateScriptEvent):Void {
+		if (PlayState.instance == null || PlayState.instance.isMinimalMode) {
+			previousSongTime = null;
+			return;
+		}
+		
 		pressedReload = FlxG.keys.justPressed.F5;
+		
+		if (previousSongTime != null) {
+			var curSongTime:Float = Conductor.get_instance().songPosition;
+			if (curSongTime < previousSongTime) {
+				var curStep:Int = Conductor.get_instance().currentStep;
+				var toRemove:Array<Int> = new Array();
+				for (idx in completedEvents) {
+					if (curStep < idx) {
+						toRemove.push(idx);
+					}
+				}
+				
+				for (idx in toRemove) {
+					completedEvents.remove(idx);
+				}
+			}
+		}
 	}
 	
 	override public function onDestroy(event:ScriptEvent):Void {
-		if (
-			(PlayState.instance != null && PlayState.instance.criticalFailure) ||
-			(!FlxG.keys.justPressed.F5 && !pressedReload)
-		) {
+		previousSongTime = null;
+		
+		if (inPlayState && PlayState.instance != null && !FlxG.keys.justPressed.F5 && !pressedReload) {
+			inPlayState = false;
+			
+			setDefaultVars();
+			
 			doCallbackList(callbacks.closePersist);
 			doCallbackList(callbacks.close);
+			
+			reset();
 		}
 	}
 	
 	private function onPlayStateCreate():Void {
+		if (PlayState.instance == null) {
+			return;
+		}
+		
+		setDefaultVars();
+		
+		doCallbackList(callbacks.createPersist);
+		doCallbackList(callbacks.create);
+	}
+	
+	private function setDefaultVars():Void {
 		if (PlayState.instance == null) {
 			return;
 		}
@@ -484,9 +540,6 @@ class SongHelper extends ScriptedModule {
 		songVars.camGame = songVars.instance.camGame;
 		songVars.camHUD = songVars.instance.camHUD;
 		songVars.camCutscene = songVars.instance.camCutscene;
-		
-		doCallbackList(callbacks.createPersist);
-		doCallbackList(callbacks.create);
 	}
 	
 	private function reset():Void {
@@ -516,6 +569,7 @@ class SongHelper extends ScriptedModule {
 		
 		events = null;
 		
+		previousSongTime = null;
 		completedEvents.resize(0);
 	}
 	

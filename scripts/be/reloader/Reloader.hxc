@@ -61,7 +61,7 @@ typedef ReloadData = {
  * import funkin.modding.module.ScriptedModule;
  * 
  * class ExampleModule extends ScriptedModule {
- *     public function new() {
+ *     override public function new() {
  *         super("exampleMod.ExampleModule");
  *     }
  *     
@@ -105,7 +105,7 @@ typedef ReloadData = {
  * ```
  */
 class Reloader extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.reloader.Reloader", -2147483648);
 	}
 	

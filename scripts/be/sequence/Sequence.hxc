@@ -83,7 +83,7 @@ typedef SequenceObj = {
  * - `be.song.SongHelper`
  */
 class Sequence extends ScriptedModule {
-	public function new() {
+	override public function new() {
 		super("be.sequence.Sequence", -2147483648);
 	}
 	
