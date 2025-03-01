@@ -105,6 +105,17 @@ class GenUtil extends ScriptedModule {
 	}
 	
 	/**
+	 * Clones an anonymous object.
+	 * 
+	 * @param obj The object to clone.
+	 * @param deep If `true`, will clone nested objects as well.
+	 * @return A new object with the same values as `obj`.
+	 */
+	public function objectClone(obj:Dynamic, deep:Bool = true):Dynamic {
+		return objectMerge(obj, {}, false, deep);
+	}
+	
+	/**
 	 * Gets all paths of an anonymous object.
 	 * 
 	 * @param obj The object to get paths from.

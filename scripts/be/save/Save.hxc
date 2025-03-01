@@ -1,5 +1,3 @@
-// NOTE: autosave currently broken!! see `be.threads.Threads`
-
 package be.save;
 
 import String;

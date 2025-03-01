@@ -143,7 +143,7 @@ class AssetLists extends ScriptedModule {
 	 * @param forPlayState If `true`, any image keys will also be added to `playStateKeys`.
 	 * @param persistent If `true`, any image keys will also be added to `persistentKeys`. Overrides `forPlayState`.
 	 * @param onFileCached Called when each asset finishes caching in the async thread.
-	 * @param onComplete Called when all assets are cached.
+	 * @param onComplete Called when all assets are cached, with one argument for whether the operation was successful or not.
 	 * @return Whether the thread was created successfully or not.
 	 */
 	public function cacheListAsync(
@@ -151,7 +151,7 @@ class AssetLists extends ScriptedModule {
 		forPlayState:Bool = false,
 		persistent:Bool = false,
 		?onFileCached:OnFileCached,
-		?onComplete:()->Void
+		?onComplete:(Bool)->Void
 	):Bool {
 		return ModuleHandler.getModule("be.assets.Assets").scriptCall("cacheAssetsAsync", [lists.get(id), forPlayState, persistent, onFileCached, onComplete]);
 	}

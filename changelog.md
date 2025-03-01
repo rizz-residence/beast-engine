@@ -36,6 +36,7 @@
   - Events now reinstate themselves when moving backwards in the song (if you need to do that).
   - Small stability improvements.
 - Changes to `be.util.GenUtil`
+  - Added `objectClone`.
   - `objectMerge` and `objectPaths` are now iterative instead of recursive to avoid stack overflows.
   - `objectMerge` and `objectPaths` now have a `deep` parameter.
   - Small stability improvements.

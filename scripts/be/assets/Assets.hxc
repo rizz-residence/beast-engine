@@ -230,10 +230,7 @@ class Assets extends ScriptedModule {
 			sounds: new Array(),
 			music: new Array(),
 			json: new Array(),
-			text: new Array(),
-			
-			// just for `onFileCached`
-			all: new Array()
+			text: new Array()
 		};
 		
 		var assetCount:Int = 0;
@@ -241,7 +238,6 @@ class Assets extends ScriptedModule {
 			if (ReflectUtil.hasAnonymousField(params, type) && Std.isOfType(ReflectUtil.getAnonymousField(params, type), Array)) {
 				for (path in ReflectUtil.getAnonymousField(params, type)) {
 					ReflectUtil.getAnonymousField(asyncParams, type).push(path);
-					asyncParams.all.push(path);
 					assetCount++;
 				}
 			}
@@ -256,7 +252,7 @@ class Assets extends ScriptedModule {
 			return false;
 		}
 		
-		var threadCreated:Bool = ModuleHandler.getModule("be.threads.Threads").scriptCall("queueAsync", [
+		var threadData:Dynamic = ModuleHandler.getModule("be.threads.Threads").scriptCall("queueAsync", [
 			function(data:Dynamic):Void {
 				var cachedCount:Float = 0;
 				for (type in ["images", "sounds", "music", "json", "text"]) {
@@ -276,7 +272,12 @@ class Assets extends ScriptedModule {
 						data.data.dt = Timer.stamp() - data.data.dt;
 						
 						cachedCount++;
-						data.progress(cachedCount);
+						
+						if (data.panic) {
+							return;
+						}
+						
+						data.data.onFileCached(path, cachedCount / data.data.assetCount, data.data.dt);
 					}
 				}
 			},
@@ -288,24 +289,16 @@ class Assets extends ScriptedModule {
 					forPlayState: forPlayState,
 					persistent: persistent,
 					
+					assetCount: assetCount,
+					
 					onFileCached: onFileCached == null ? function(path:String, percentDone:Float, dt:Float):Void {} : onFileCached,
 					onComplete: onComplete,
 					
 					dt: 0
 				},
 				
-				total: assetCount,
-				
 				onError: function(data:Dynamic, err:Dynamic):Void {
 					data.data.onComplete(false);
-				},
-				
-				onProgress: function(data:Dynamic, ?progress:Int, ?total:Int):Void {
-					if (data.panic) {
-						return;
-					}
-					
-					data.data.onFileCached(data.data.params.all[progress], progress / total, data.data.dt);
 				},
 				
 				onComplete: function(data:Dynamic, result:Dynamic):Void {
@@ -327,7 +320,7 @@ class Assets extends ScriptedModule {
 			}
 		]);
 		
-		return threadCreated;
+		return threadData != null;
 	}
 	
 	/**
