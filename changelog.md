@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.1.1
+## v1.1.1 (dev)
 
 - Improved and fixed documentation.
 - Changes to `be.neocam.Neocam`

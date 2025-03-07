@@ -10,8 +10,6 @@ If any mods you'd like to use require it, just drag `beast-engine.zip` into your
 You can find the releases [here](https://github.com/rizz-residence/beast-engine/releases).
 This repo is open to contribution!
 
-The `dev` branch version is suffixed with `-dev` as it may be unstable and/or contain breaking changes until the next release.
-
 ## Features
 
 - `be.assets` - Asset caching helper package.
