@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.1
+
+- Improved and fixed documentation.
+- Changes to `be.neocam.Neocam`
+  - Gave `setBumpPattern` a default pattern to use if none is provided.
+  - Small stability improvements.
+
 ## v1.1.0
 
 - Added credits to changelog.

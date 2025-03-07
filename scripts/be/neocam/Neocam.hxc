@@ -1,10 +1,18 @@
 package be.neocam;
 
+import Bool;
+import Float;
+import Int;
+import String;
+
 import haxe.ds.IntMap;
 import haxe.ds.StringMap;
 
+import thx.Types;
+
 import flixel.FlxG;
 import flixel.FlxCamera;
+import flixel.math.FlxPoint;
 import flixel.tweens.FlxTween;
 
 import funkin.Conductor;
@@ -151,12 +159,12 @@ typedef NeocamObj = {
 	/**
 	 * Set a looping camera bump pattern for use during songs, based on steps.
 	 * 
-	 * @param pattern A map of step indices to zoom bump amounts.
+	 * @param pattern A map of step indices to zoom bump amounts. If not provided, the default pattern is used.
 	 * @param length The length of the pattern in steps before looping. If not provided, it's the highest index of `pattern`
 	 * @param start Optionally change the relative starting step of the pattern.
 	 * @param relative Whether to flag the pattern as relative to the camera zoom.
 	 */
-	setBumpPattern:(IntMap<Float>, Int, Bool)->Void,
+	setBumpPattern:(Null<IntMap>, Int, Int, Bool)->Void,
 	
 	/**
 	 * Internal callback for the note offset when a note is hit.
@@ -235,7 +243,7 @@ typedef NeocamData = {
 	noteOffsetRelative:Bool,
 	
 	/**
-	 * Optional starting note offset for the camera.
+	 * Optional starting 16-step bump pattern for the camera.
 	 * Defaults to the basic 1-measure pattern used in the game.
 	 */
 	startBumpPattern:Null<IntMap>
@@ -303,7 +311,7 @@ class Neocam extends ScriptedModule {
 	 * @return The new `NeocamObj` object.
 	 */
 	public function new_Neocam(?data:NeocamData):NeocamObj {
-		if (data == null) {
+		if (!Types.isAnonymousObject(data)) {
 			data = {};
 		}
 		
@@ -313,15 +321,15 @@ class Neocam extends ScriptedModule {
 			enabled: true,
 			paused: false,
 			
-			gameCamera: data.gameCamera == null ? false : data.gameCamera,
+			gameCamera: Std.isOfType(data.gameCamera, Bool) ? data.gameCamera : false,
 			
 			position: {
 				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
-					cur: data.startPosition == null ? (data.parent == null ? 0 : data.parent.scroll.x) : data.startPosition.x
+					cur: Std.isOfType(data.startPosition, FlxPoint) ? data.startPosition.x : (Std.isOfType(data.parent, FlxCamera) ? data.parent.scroll.x : 0)
 				}]),
 				
 				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
-					cur: data.startPosition == null ? (data.parent == null ? 0 : data.parent.scroll.y) : data.startPosition.y
+					cur: Std.isOfType(data.startPosition, FlxPoint) ? data.startPosition.y : (Std.isOfType(data.parent, FlxCamera) ? data.parent.scroll.y : 0) 
 				}])
 			},
 			
@@ -341,15 +349,15 @@ class Neocam extends ScriptedModule {
 			},
 			
 			zoom: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{
-				cur: data.startZoom == null ? (data.parent == null ? 1 : data.parent.zoom) : data.startZoom
+				cur: Std.isOfType(data.startZoom, Float) ? data.startZoom : (Std.isOfType(data.parent, FlxCamera) ? data.parent.zoom : 1)
 			}]),
 			
 			zoomShake: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{shake: true}]),
 			
 			alpha: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal", [{cur: 1}]),
 			
-			noteOffsetScale: data.noteOffsetScale == null ? 0 : data.noteOffsetScale,
-			noteOffsetRelative: data.noteOffsetRelative == null ? false : data.noteOffsetRelative,
+			noteOffsetScale: Std.isOfType(data.noteOffsetScale, Float) ? data.noteOffsetScale : 0,
+			noteOffsetRelative: Std.isOfType(data.noteOffsetRelative, Float) ? data.noteOffsetRelative : false,
 			noteOffset: {
 				x: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal"),
 				y: ModuleHandler.getModule("be.math.MovingVal").scriptCall("new_MovingVal")
@@ -357,7 +365,7 @@ class Neocam extends ScriptedModule {
 			
 			targets: new StringMap(),
 			
-			bumpPattern: data.startBumpPattern == null ? null : data.startBumpPattern,
+			bumpPattern: Std.isOfType(data.startBumpPattern, IntMap) ? data.startBumpPattern : null,
 			bumpPatternStart: 0,
 			bumpPatternLength: 16,
 			bumpPatternRelative: false,
@@ -365,9 +373,14 @@ class Neocam extends ScriptedModule {
 			exists: true
 		};
 		
-		if (obj.bumpPattern == null) {
-			obj.bumpPattern = new IntMap();
-			obj.bumpPattern.set(0, (Constants.DEFAULT_BOP_INTENSITY - 1.0) * (obj.gameCamera ? 1 : 2));
+		obj.getDefaultBumpPattern = function():IntMap<Float> {
+			var ret:IntMap<Float> = new IntMap();
+			ret.set(0, (Constants.DEFAULT_BOP_INTENSITY - 1.0) * (obj.gameCamera ? 1 : 2));
+			return ret;
+		};
+		
+		if (!Std.isOfType(obj.bumpPattern, IntMap)) {
+			obj.bumpPattern = obj.getDefaultBumpPattern();
 		}
 		
 		obj.bump = function(amount:Float, relative:Bool = false):Void {
@@ -378,21 +391,26 @@ class Neocam extends ScriptedModule {
 			obj.zoom.set_cur(relative ? obj.zoom.cur * (1 + amount) : obj.zoom.cur + amount);
 		};
 		
-		obj.setBumpPattern = function(pattern:IntMap<Float>, length:Int = 0, ?start:Int, relative:Bool = false):Void {
+		obj.setBumpPattern = function(?pattern:IntMap<Float>, length:Int = 0, ?start:Int, relative:Bool = false):Void {
 			if (!obj.exists) {
 				return;
 			}
 			
-			obj.bumpPattern = pattern;
-			
-			var lastStep:Int = length;
-			for (step in pattern.keys()) {
-				lastStep = Math.max(lastStep, step);
+			if (!Std.isOfType(pattern, IntMap)) {
+				obj.bumpPattern = obj.getDefaultBumpPattern();
+				obj.bumpPatternLength = 16;
+			} else {
+				obj.bumpPattern = pattern;
+				
+				var lastStep:Int = length;
+				for (step in pattern.keys()) {
+					lastStep = Math.max(lastStep, step);
+				}
+				
+				obj.bumpPatternLength = lastStep;
 			}
 			
-			obj.bumpPatternLength = lastStep;
-			
-			if (start != null) {
+			if (Std.isOfType(start, Int)) {
 				obj.bumpPatternStart = start;
 			}
 			
@@ -449,14 +467,14 @@ class Neocam extends ScriptedModule {
 				case "FocusCamera": {
 					if (obj.gameCamera) {
 						var x:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "x"]);
-						if (x == null) {
+						if (!Std.isOfType(x, Float)) {
 							x = 0;
 						}
 						
 						x -= 640;
 						
 						var y:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "y"]);
-						if (y == null) {
+						if (!Std.isOfType(y, Float)) {
 							y = 0;
 						}
 						
@@ -494,11 +512,11 @@ class Neocam extends ScriptedModule {
 						}
 						
 						var duration:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "duration"]);
-						if (duration == null) {
+						if (Std.isOfType(duration, Float)) {
 							duration = 0;
 						}
 						
-						if (Conductor.instance != null) {
+						if (Conductor.get_instance() != null) {
 							duration = Conductor.instance.stepLengthMs * duration / 1000;
 						}
 						
@@ -525,12 +543,12 @@ class Neocam extends ScriptedModule {
 				case "SetCameraBop": {
 					if (PlayState.instance != null) {
 						var rate:Null<Int> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetInt", [eventData, "rate"]);
-						if (rate == null) {
+						if (!Std.isOfType(rate, Int)) {
 							rate = Constants.DEFAULT_ZOOM_RATE;
 						}
 						
 						var intensity:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "intensity"]);
-						if (intensity == null) {
+						if (!Std.isOfType(intensity, Float)) {
 							intensity = 1.0;
 						}
 						
@@ -550,22 +568,22 @@ class Neocam extends ScriptedModule {
 							!PlayState.instance.isMinimalMode
 						) {
 							var zoom:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "zoom"]);
-							if (zoom == null) {
+							if (!Std.isOfType(zoom, Float)) {
 								zoom = 1;
 							}
 							
 							var duration:Null<Float> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetFloat", [eventData, "duration"]);
-							if (duration == null) {
+							if (!Std.isOfType(duration, Float)) {
 								duration = 4;
 							}
 							
 							var mode:Null<String> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetString", [eventData, "mode"]);
-							if (mode == null) {
+							if (!Std.isOfType(mode, String)) {
 								mode = "direct";
 							}
 							
 							var ease:Null<String> = ModuleHandler.getModule("be.util.SongUtil").scriptCall("eventGetString", [eventData, "ease"]);
-							if (ease == null) {
+							if (!Std.isOfType(ease, String)) {
 								ease = "linear";
 							}
 							
@@ -587,7 +605,7 @@ class Neocam extends ScriptedModule {
 		};
 		
 		obj.onUpdate = function():Void {
-			if (!obj.exists || obj.parent == null) {
+			if (!obj.exists || !Std.isOfType(obj.parent, FlxCamera)) {
 				return;
 			}
 			
@@ -692,20 +710,6 @@ class Neocam extends ScriptedModule {
 			
 			exists = false;
 		};
-		
-		if (data.startPosition != null) {
-			obj.position.x.snap(data.startPosition.x, true);
-			obj.position.y.snap(data.startPosition.y, true);
-		} else if (data.parent != null) {
-			obj.position.x.snap(data.parent.scroll.x, true);
-			obj.position.y.snap(data.parent.scroll.y, true);
-		}
-		
-		if (data.startZoom != null) {
-			obj.zoom.snap(data.startZoom, true);
-		} else if (data.parent != null) {
-			obj.zoom.snap(data.parent.zoom, true);
-		}
 		
 		if (!FlxG.signals.postUpdate.has(obj.onUpdate)) {
 			FlxG.signals.postUpdate.add(obj.onUpdate);
